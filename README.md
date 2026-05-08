@@ -1,4 +1,4 @@
-# GoHighLevel MCP Server v2
+# GoHighLevel MCP Server
 
 A production-grade [Model Context Protocol](https://modelcontextprotocol.io) server providing comprehensive, well-typed access to the [GoHighLevel](https://www.gohighlevel.com) CRM API for Claude Desktop and other MCP clients.
 
