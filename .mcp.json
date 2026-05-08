@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "gohighlevel": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "source .env && cd \"$(pwd)\" && venv/bin/python -m ghl_mcp"
+      ]
+    }
+  }
+}

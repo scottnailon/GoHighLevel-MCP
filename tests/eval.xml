@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+GoHighLevel MCP Server v2 — Evaluation Suite
+=============================================
+
+These 10 questions test whether a Claude agent can effectively use the GHL
+MCP to accomplish realistic, complex tasks. Each question requires
+multiple tool calls, tests a different category of capability, and has a
+verifiable, stable answer.
+
+Run against a populated test sub-account where the underlying data is known.
+Replace the answer values to match your test environment.
+
+Per the skill spec: questions are independent, read-only, complex, realistic,
+and the answers are stable and verifiable.
+-->
+<evaluation>
+  <qa_pair>
+    <question>Find the total number of contacts in our Founders pipeline that have the tag "annual-prepay" and a "Welcome Sequence" workflow attached. Return just the integer count.</question>
+    <answer>5</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>List all custom fields of type SINGLE_OPTIONS configured on the contact model for our location. Return the count.</question>
+    <answer>7</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>What is the name of the sales pipeline that contains a stage called "Founders Confirmed"? Return just the pipeline name.</question>
+    <answer>Founders Onboarding</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>How many sub-accounts (locations) under our agency have the country code "AU"? Return just the integer.</question>
+    <answer>3</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>List all snapshots available to our agency. How many have "Founders" in their name? Return the integer count.</question>
+    <answer>1</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>For the contact with email "demo@profitplatform.com.au", what is the value of their custom field "Industry"? Return just the value string.</question>
+    <answer>Marketing</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>Count the number of opportunities currently in the "Discovery Call Booked" stage of any pipeline in our location. Return the integer.</question>
+    <answer>4</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>List all webhooks configured for our location. How many are subscribed to the "FormSubmit" event? Return the integer count.</question>
+    <answer>2</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>What is the slot duration in minutes of the calendar named "Founders Onboarding Call"? Return just the integer.</question>
+    <answer>45</answer>
+  </qa_pair>
+
+  <qa_pair>
+    <question>How many users with the role "admin" have access to our location? Return just the integer count.</question>
+    <answer>2</answer>
+  </qa_pair>
+</evaluation>

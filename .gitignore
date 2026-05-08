@@ -1,0 +1,61 @@
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+build/
+dist/
+develop-eggs/
+.eggs/
+wheels/
+share/python-wheels/
+MANIFEST
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build artifacts
+*.log
+.ruff_cache/
+.mypy_cache/
+
+# Deployment backups
+*.v1.*.bak
+*.v1.*/
+
+# Personal data (never commit real contact lists)
+data/tier1_contacts.csv
+data/tier2_contacts.csv
+data/tier3_contacts.csv
+data/*.csv
+!data/*.example.csv
