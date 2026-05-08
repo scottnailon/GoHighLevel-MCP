@@ -6,33 +6,6 @@ A production-grade [Model Context Protocol](https://modelcontextprotocol.io) ser
 
 ---
 
-## Why v2
-
-Compared to the original `server.py`:
-
-| | v1 | v2 |
-|---|---|---|
-| Framework | Low-level `mcp.server.Server` | **FastMCP** |
-| Validation | Manual `args.get(...)` | **Pydantic v2** |
-| Lines of code | 1,061 (mostly boilerplate) | ~3,000 across modular files |
-| Tool count | 46 | **78** |
-| Custom-field CRUD | List only | **Full CRUD** |
-| Snapshot operations | None | **List, import, share** |
-| Sub-account management | Get-current only | **Full CRUD** |
-| SaaS endpoints | None | **5 tools (enable/disable/plan/wallet)** |
-| Webhooks | None | **Full CRUD** |
-| Funnels, Companies | None | Basic coverage |
-| Response formats | JSON only | **Markdown + JSON** |
-| Pagination metadata | None | `total`, `has_more`, `next_skip` |
-| Rate limiting | Custom sliding window | Reads GHL's `X-RateLimit-*` headers |
-| Phone validation | None | **E.164 enforced** |
-| Timezone validation | None | **IANA tz enforced** |
-| Webhook event validation | None | **31 valid events enforced** |
-| Startup checks | None | **Live PIT pre-flight + credential hints** |
-| Tests | 3 manual scripts | **64 pytest tests** |
-
----
-
 ## Installation
 
 See [INSTALL.md](INSTALL.md) for the full Mac and Windows install guides.
@@ -202,7 +175,7 @@ tests/
 docs/
 ├── TOOLS.md             auto-generated tool reference
 ├── ARCHITECTURE.md      design rationale
-└── MIGRATION.md         v1 → v2 migration guide
+└── MIGRATION.md         migration guide
 ```
 
 ### Adding a new tool
@@ -213,12 +186,6 @@ docs/
 4. Make HTTP calls via `await get_client()`.
 5. Register the module in `ghl_mcp/tools/__init__.py` if it's new.
 6. Add an import to `tests/test_imports.py`.
-
----
-
-## Migration from v1
-
-See [docs/MIGRATION.md](docs/MIGRATION.md). Short version: change `args` from `["server.py"]` to `["-m", "ghl_mcp"]` in your config. The legacy `server.py` is preserved as a rollback path.
 
 ---
 
