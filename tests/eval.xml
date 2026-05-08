@@ -41,7 +41,7 @@ and the answers are stable and verifiable.
   </qa_pair>
 
   <qa_pair>
-    <question>For the contact with email "demo@profitplatform.com.au", what is the value of their custom field "Industry"? Return just the value string.</question>
+    <question>For the contact with email "demo@example.com", what is the value of their custom field "Industry"? Return just the value string.</question>
     <answer>Marketing</answer>
   </qa_pair>
 
