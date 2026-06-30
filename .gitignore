@@ -62,3 +62,6 @@ data/*.csv
 
 # Internal deployment instructions — not for public repo
 CLAUDE.md
+
+# Local devops helper — writes to ~/.claude.json, carries private location ID
+scripts/wire_mcp.sh

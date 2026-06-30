@@ -312,3 +312,14 @@ To find your agency ID, either look in GoHighLevel → Agency Settings, or start
 ```
 Agency/company ID auto-detected from your location: <your-agency-id>
 ```
+
+### Not sure which location ID to use?
+
+If you manage several sub-accounts and aren't sure which one to set as your default `GHL_LOCATION_ID`, the bundled helper lists every location your token can access:
+
+```bash
+GHL_API_KEY=pit-your-token GHL_LOCATION_ID=any-location-you-know \
+  python scripts/discover_locations.py
+```
+
+It prints each sub-account's name and ID (read-only — it changes nothing), so you can pick the one you want as your default.
