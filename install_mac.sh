@@ -94,6 +94,10 @@ cat <<JSON
 JSON
 echo "----------- COPY ABOVE -----------"
 echo ""
+echo "Agency owners: those two values are all you need — your agency/company ID"
+echo "is auto-detected at startup, so the agency tools (snapshots, SaaS, etc.)"
+echo "work without any extra config."
+echo ""
 echo "Open the config file with:"
 echo "  open -e ~/Library/Application\\ Support/Claude/claude_desktop_config.json"
 echo ""

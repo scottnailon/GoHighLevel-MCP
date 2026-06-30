@@ -61,7 +61,10 @@ You need two values from GoHighLevel:
    - Webhooks: `readonly` + `write`
    - *(Agency only)* Snapshots: `readonly` + `write`
    - *(Agency only)* SaaS Locations: `read` + `write`
+   - *(Agency only)* Companies: `readonly`
 5. Save and copy the token — it starts with `pit-`
+
+> **Agency owners:** tick the three *(Agency only)* scopes above. Without them, the agency tools (snapshots, sub-account management, companies) return **401 errors** even though everything else works — a 401 on those tools almost always means a missing agency scope, not an expired token.
 
 > **Note:** Private Integration Tokens expire after 90 days of non-use. If tools stop working with 401 errors, come back here and regenerate the token, then update `GHL_API_KEY` in your Claude Desktop config.
 
@@ -126,6 +129,7 @@ You should see ~78 tools listed. Then try a real query:
 | "Server failed to start" | Re-run installer, paste fresh JSON snippet into config |
 | JSON error on startup | Validate your config at [jsonlint.com](https://jsonlint.com) |
 | 401 errors | PIT token expired — regenerate at GHL → Settings → Private Integrations |
+| 401 only on agency tools (snapshots/SaaS/companies), rest work | Token is missing the agency scopes — edit the integration and tick Snapshots, SaaS Locations and Companies, then regenerate |
 | Sudden 401 errors on tools that were working | Private Integration Tokens auto-expire after 90 days of non-use — regenerate at GHL → Settings → Private Integrations and update `GHL_API_KEY` in your config |
 | Tools show but return nothing | Wrong Location ID — get it from GHL → Settings → Business Profile |
 | Claude Desktop not picking up changes | Must fully quit with ⌘Q, not just close the window |
@@ -192,7 +196,10 @@ You need two values from GoHighLevel:
    - Webhooks: `readonly` + `write`
    - *(Agency only)* Snapshots: `readonly` + `write`
    - *(Agency only)* SaaS Locations: `read` + `write`
+   - *(Agency only)* Companies: `readonly`
 5. Save and copy the token — it starts with `pit-`
+
+> **Agency owners:** tick the three *(Agency only)* scopes above. Without them, the agency tools (snapshots, sub-account management, companies) return **401 errors** even though everything else works — a 401 on those tools almost always means a missing agency scope, not an expired token.
 
 > **Note:** Private Integration Tokens expire after 90 days of non-use. If tools stop working with 401 errors, come back here and regenerate the token, then update `GHL_API_KEY` in your Claude Desktop config.
 
@@ -257,6 +264,7 @@ You should see ~78 tools listed. Then try a real query:
 | "Server failed to start" | Re-run installer, paste fresh JSON snippet into config |
 | JSON error on startup | Validate your config at [jsonlint.com](https://jsonlint.com) |
 | 401 errors | PIT token expired — regenerate at GHL → Settings → Private Integrations |
+| 401 only on agency tools (snapshots/SaaS/companies), rest work | Token is missing the agency scopes — edit the integration and tick Snapshots, SaaS Locations and Companies, then regenerate |
 | Sudden 401 errors on tools that were working | Private Integration Tokens auto-expire after 90 days of non-use — regenerate at GHL → Settings → Private Integrations and update `GHL_API_KEY` in your config |
 | Tools show but return nothing | Wrong Location ID — get it from GHL → Settings → Business Profile |
 | Claude Desktop not picking up changes | Must Quit from the system tray, not just close the window |
@@ -274,20 +282,22 @@ Re-run the installer script at any time. It does a `git pull` on the existing in
 
 ## Agency / SaaS features
 
-> **Agency accounts only.** If you manage a single sub-account (location), you do not need `GHL_COMPANY_ID` — skip this section entirely.
+> **Good news for agency owners: there is nothing extra to configure.** The agency tools work with the same two values everyone uses (`GHL_API_KEY` and `GHL_LOCATION_ID`).
 
-`GHL_COMPANY_ID` unlocks a set of agency-scoped tool categories that are unavailable without it:
+The following tool categories operate at the agency level:
 
-| Tool category | Requires `GHL_COMPANY_ID` |
+| Tool category | What it does |
 |---|---|
-| **Snapshots** — create, list, and apply account snapshots | Yes |
-| **SaaS / sub-account management** — create, update, enable/disable sub-accounts | Yes |
-| **Companies** — agency-level company record operations | Yes |
-| **Funnels** — funnel management across the agency | Yes |
+| **Snapshots** | Create, list, and apply account snapshots |
+| **SaaS / sub-account management** | Create, update, enable/disable sub-accounts |
+| **Companies** | Agency-level company record operations |
+| **Funnels** | Funnel management across the agency |
 
-All other tools (Contacts, Conversations, Calendars, Opportunities, etc.) work with just `GHL_API_KEY` and `GHL_LOCATION_ID`.
+These need your agency/company ID — but you don't have to hunt for it. On startup the server reads it automatically from your location record and enables the agency tools. As long as your token is valid **and has the agency scopes** (Snapshots, SaaS Locations, Companies — see Step 3), they just work.
 
-To enable the agency tools, add your Agency ID to the `env` block in your Claude Desktop config:
+### Pinning a specific agency (optional)
+
+The only time you need to set `GHL_COMPANY_ID` yourself is if you want to **pin** a particular agency — for example, if your token can see more than one. In that case add it to the `env` block:
 
 ```json
 "env": {
@@ -297,4 +307,8 @@ To enable the agency tools, add your Agency ID to the `env` block in your Claude
 }
 ```
 
-Get your Agency ID from GoHighLevel → Agency Settings.
+To find your agency ID, either look in GoHighLevel → Agency Settings, or start the server once and copy it from the log:
+
+```
+Agency/company ID auto-detected from your location: <your-agency-id>
+```

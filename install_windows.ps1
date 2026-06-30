@@ -123,6 +123,10 @@ Write-Host "----------- COPY BELOW -----------" -ForegroundColor Yellow
 "@
 Write-Host "----------- COPY ABOVE -----------" -ForegroundColor Yellow
 Write-Host ""
+Write-Host "Agency owners: those two values are all you need — your agency/company ID"
+Write-Host "is auto-detected at startup, so the agency tools (snapshots, SaaS, etc.)"
+Write-Host "work without any extra config."
+Write-Host ""
 Write-Host "Open the config file in Notepad:"
 Write-Host "  notepad `"$ConfigPath`""
 Write-Host ""

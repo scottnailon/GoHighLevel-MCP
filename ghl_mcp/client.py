@@ -17,10 +17,15 @@ from typing import Any
 
 import httpx
 
+from ghl_mcp import __version__
 from ghl_mcp.config import settings
 from ghl_mcp.errors import GHLTimeoutError, map_status_to_exception
 
 logger = logging.getLogger("ghl_mcp.client")
+
+# GHL is fronted by Cloudflare, which rejects requests carrying the default
+# Python User-Agent (HTTP 403, Error 1010). Always send an explicit UA.
+USER_AGENT = f"ghl-mcp/{__version__}"
 
 
 class GHLClient:
@@ -76,6 +81,7 @@ class GHLClient:
             "Version": self._api_version,
             "Accept": "application/json",
             "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
         }
 
     # ---------------------------------------------------------------

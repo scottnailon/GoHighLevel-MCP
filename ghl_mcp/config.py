@@ -52,17 +52,28 @@ class Settings:
     def require_company_id(self, override: str | None = None) -> str:
         """Return the explicit override, or the configured default, or raise.
 
-        Used by agency-scoped operations like sub-account management and
-        snapshot operations which require an agency/company context.
+        Resolution order:
+          1. An explicit ``override`` passed to the tool call.
+          2. ``GHL_COMPANY_ID`` from the environment, if set.
+          3. The company ID auto-detected from the location at startup
+             (see :func:`set_resolved_company_id`). This means agency owners
+             do not have to hunt for their Agency ID — it is read from the
+             location record automatically.
+
+        Raises a clear, actionable error only if all three are unavailable.
         """
         if override:
             return override
         if self.company_id:
             return self.company_id
+        if _resolved_company_id:
+            return _resolved_company_id
         raise ValueError(
-            "No company_id provided and GHL_COMPANY_ID is not set. "
-            "Agency-scoped operations require this. Get it from your "
-            "GHL Agency Settings."
+            "Could not determine your agency/company ID. This usually means "
+            "the startup auto-detection did not run or the token lacks "
+            "locations.readonly scope. Either pass company_id explicitly, set "
+            "GHL_COMPANY_ID in your config, or check that GHL_API_KEY and "
+            "GHL_LOCATION_ID are valid."
         )
 
 
@@ -81,3 +92,31 @@ def _load_settings() -> Settings:
 
 # Module-level singleton — loaded once per process.
 settings = _load_settings()
+
+
+# ---------------------------------------------------------------------------
+# Auto-detected company ID
+# ---------------------------------------------------------------------------
+# The agency/company ID is present on every location record, so it can be read
+# once at startup from GET /locations/{id} rather than asking the user to find
+# it in Agency Settings. It is stored here (module-level, mutable) because
+# Settings itself is a frozen dataclass. require_company_id() falls back to this
+# value when GHL_COMPANY_ID is not explicitly set.
+_resolved_company_id: str | None = None
+
+
+def set_resolved_company_id(company_id: str | None) -> None:
+    """Record the company ID auto-detected from the location at startup.
+
+    Called by the startup pre-flight check once it has a valid location
+    response. A no-op for falsy values so a failed lookup never clobbers a
+    previously good value.
+    """
+    global _resolved_company_id
+    if company_id:
+        _resolved_company_id = company_id
+
+
+def get_resolved_company_id() -> str | None:
+    """Return the company ID auto-detected at startup, if any."""
+    return _resolved_company_id

@@ -111,7 +111,7 @@ GHL_LOCATION_ID=...
 GHL_BASE_URL=https://services.leadconnectorhq.com   # optional
 
 # New in v2
-GHL_COMPANY_ID=...                # required for snapshot/sub-account/SaaS tools
+GHL_COMPANY_ID=...                # optional; auto-detected at startup for agency tools
 GHL_API_VERSION=2021-07-28         # was hardcoded in v1
 GHL_TIMEOUT=30                     # configurable now
 GHL_MAX_RETRIES=3                  # configurable now

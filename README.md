@@ -33,7 +33,7 @@ All configuration is via environment variables. See `.env.example` for the full 
 - `GHL_LOCATION_ID` — default sub-account ID. Most tools accept a per-call override.
 
 **Optional:**
-- `GHL_COMPANY_ID` — required for agency-scoped tools: snapshots, SaaS management, sub-account CRUD, companies.
+- `GHL_COMPANY_ID` — agency/company ID for agency-scoped tools (snapshots, SaaS management, sub-account CRUD, companies, funnels). **Auto-detected from your location at startup — you normally don't need to set this.** Only set it to pin a specific agency. See [Agency owners](#agency-owners) below.
 - `GHL_BASE_URL` — defaults to `https://services.leadconnectorhq.com`.
 - `GHL_API_VERSION` — defaults to `2021-07-28`.
 - `GHL_TIMEOUT` — request timeout in seconds, default 30.
@@ -81,15 +81,24 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (Mac) o
       "args": ["-m", "ghl_mcp"],
       "env": {
         "GHL_API_KEY": "pit-your-token-here",
-        "GHL_LOCATION_ID": "your-location-id",
-        "GHL_COMPANY_ID": "your-agency-id"
+        "GHL_LOCATION_ID": "your-location-id"
       }
     }
   }
 }
 ```
 
-The install scripts in [INSTALL.md](INSTALL.md) print the exact JSON snippet with the correct Python path for your machine.
+Two values are all you need. The install scripts in [INSTALL.md](INSTALL.md) print the exact JSON snippet with the correct Python path for your machine.
+
+### Agency owners
+
+If you run a GHL **agency** and want the agency-level tools (snapshots, SaaS / sub-account management, companies, funnels), there is nothing extra to *configure*. The server reads your agency/company ID from your location automatically at startup, so the agency tools light up with the same two values above — provided your Private Integration Token includes the agency scopes (Snapshots, SaaS Locations, Companies). A `401` on an agency tool while the rest work almost always means a missing agency scope, not an expired token.
+
+You only need to add `GHL_COMPANY_ID` if you want to **pin** a specific agency (e.g. you operate across more than one). To find your agency ID, either check GHL → Agency Settings, or just start the server once and copy it from the log line:
+
+```
+Agency/company ID auto-detected from your location: <your-agency-id>
+```
 
 ---
 
@@ -115,7 +124,7 @@ The install scripts in [INSTALL.md](INSTALL.md) print the exact JSON snippet wit
 | `ghl_forms_*` | 2 | List, get submissions |
 | `ghl_funnels_*` | 2 | List, get pages |
 
-### Agency / SaaS *(requires `GHL_COMPANY_ID`)*
+### Agency / SaaS *(agency ID auto-detected — no extra config)*
 
 | Prefix | Count | What it covers |
 |---|---|---|
@@ -133,7 +142,7 @@ On first run the server:
 
 1. Checks that `GHL_API_KEY` and `GHL_LOCATION_ID` are set — logs step-by-step setup instructions if not.
 2. Makes a live API call to verify the PIT is valid — logs a clear remediation banner if the token is expired (401) or missing scopes (403).
-3. Logs an info hint if `GHL_COMPANY_ID` is unset (agency tools will be unavailable).
+3. Reads your agency/company ID from that same call and auto-enables the agency tools — logs the detected ID so you can pin it via `GHL_COMPANY_ID` if you ever want to.
 
 All checks log to **stderr only** — stdout carries the MCP JSON-RPC stream.
 

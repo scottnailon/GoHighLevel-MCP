@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import sys
 import urllib.error
 import urllib.request
 
-from ghl_mcp.config import settings
+from ghl_mcp.client import USER_AGENT
+from ghl_mcp.config import set_resolved_company_id, settings
 from ghl_mcp.server import mcp
 
 
@@ -38,9 +40,14 @@ async def _check_token_live(logger: logging.Logger) -> None:
     token. Only runs when both credentials are present (i.e. after
     _check_credentials has already confirmed they are set).
 
+    On success (200) it also reads ``companyId`` from the location record and
+    records it via :func:`set_resolved_company_id`, so agency tools work without
+    the user having to find their Agency ID by hand.
+
+    * 200 → token valid; auto-detect and stash the company ID.
     * 401 → token expired or invalid; log a clear remediation banner.
     * 403 → token present but missing required scopes; log a scopes banner.
-    * Anything else (200, 4xx other, 5xx, network error) → DEBUG only; never
+    * Anything else (4xx other, 5xx, network error) → DEBUG only; never
       blocks startup so that transient network hiccups don't prevent the server
       from starting.
     """
@@ -55,6 +62,10 @@ async def _check_token_live(logger: logging.Logger) -> None:
             "Authorization": f"Bearer {settings.api_key}",
             "Version": settings.api_version,
             "Accept": "application/json",
+            # GHL sits behind Cloudflare, which blocks the default Python
+            # urllib User-Agent with a 403 (Error 1010). Send an explicit UA
+            # so the pre-flight check isn't misreported as a scope failure.
+            "User-Agent": USER_AGENT,
         },
         method="GET",
     )
@@ -65,9 +76,11 @@ async def _check_token_live(logger: logging.Logger) -> None:
     try:
         # Run the blocking urllib call in a thread so we stay async-friendly.
         loop = asyncio.get_running_loop()
-        with await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=10)) as _resp:
-            # 2xx — token is valid; nothing to warn about.
+        with await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=10)) as resp:
+            # 2xx — token is valid. Read the location record so we can
+            # auto-detect the agency/company ID from it.
             logger.debug("PIT pre-flight check passed (HTTP 2xx from /locations/%s)", settings.location_id)
+            _auto_detect_company_id(logger, resp.read())
             return
     except urllib.error.HTTPError as exc:
         status_code = exc.code
@@ -127,6 +140,46 @@ async def _check_token_live(logger: logging.Logger) -> None:
         )
 
 
+def _auto_detect_company_id(logger: logging.Logger, body: bytes) -> None:
+    """Read ``companyId`` from a location response and record it.
+
+    The location record returned by GET /locations/{id} carries the agency's
+    company ID, so agency owners never need to look it up manually. If the user
+    has set GHL_COMPANY_ID explicitly, that takes precedence and we only log;
+    otherwise the detected value becomes the fallback used by agency tools.
+
+    Best-effort: any parse problem is logged at DEBUG and ignored — a failure
+    here must never prevent the server from starting.
+    """
+    try:
+        payload = json.loads(body or b"{}")
+    except (ValueError, TypeError) as exc:
+        logger.debug("Could not parse location response for company ID: %s", exc)
+        return
+
+    location = payload.get("location", payload) if isinstance(payload, dict) else {}
+    company_id = location.get("companyId") if isinstance(location, dict) else None
+    if not company_id:
+        logger.debug("Location response did not contain a companyId.")
+        return
+
+    if settings.company_id:
+        # User pinned an explicit value; respect it, just note any mismatch.
+        if settings.company_id != company_id:
+            logger.info(
+                "GHL_COMPANY_ID is set to %s but the location belongs to agency %s — using the configured value.",
+                settings.company_id, company_id,
+            )
+        return
+
+    set_resolved_company_id(company_id)
+    logger.info(
+        "Agency/company ID auto-detected from your location: %s "
+        "(agency tools are enabled; set GHL_COMPANY_ID to pin this value).",
+        company_id,
+    )
+
+
 def _check_credentials(logger: logging.Logger) -> None:
     """Warn to stderr if required credentials are missing, with setup instructions."""
     missing = []
@@ -136,11 +189,13 @@ def _check_credentials(logger: logging.Logger) -> None:
         missing.append("GHL_LOCATION_ID")
 
     if not missing:
-        # Both required credentials are present — check for optional agency credential.
+        # Both required credentials are present. GHL_COMPANY_ID is optional —
+        # if unset, the live pre-flight check below auto-detects it from the
+        # location, so agency tools still work. Don't warn here.
         if not settings.company_id:
             logger.info(
-                "GHL_COMPANY_ID not set — agency tools (snapshots, SaaS, sub-accounts, companies) "
-                "will be unavailable. Set it in your Claude Desktop config env block if needed."
+                "GHL_COMPANY_ID not set — it will be auto-detected from your location at startup. "
+                "Set it in your config env block only if you want to pin a specific agency."
             )
         return
 
