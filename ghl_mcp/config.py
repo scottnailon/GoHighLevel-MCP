@@ -52,15 +52,15 @@ class Settings:
     def require_company_id(self, override: str | None = None) -> str:
         """Return the explicit override, or the configured default, or raise.
 
-        Resolution order:
-          1. An explicit ``override`` passed to the tool call.
-          2. ``GHL_COMPANY_ID`` from the environment, if set.
-          3. The company ID auto-detected from the location at startup
-             (see :func:`set_resolved_company_id`). This means agency owners
-             do not have to hunt for their Agency ID — it is read from the
-             location record automatically.
+        Not used by any tool in this build (no client-facing tool operates
+        above location scope) — retained only because the startup pre-flight
+        check auto-detects and logs this value as a courtesy.
 
-        Raises a clear, actionable error only if all three are unavailable.
+        Resolution order:
+          1. An explicit ``override`` passed to the call.
+          2. ``GHL_COMPANY_ID`` from the environment, if set.
+          3. The value auto-detected from the location at startup
+             (see :func:`set_resolved_company_id`).
         """
         if override:
             return override
@@ -69,11 +69,9 @@ class Settings:
         if _resolved_company_id:
             return _resolved_company_id
         raise ValueError(
-            "Could not determine your agency/company ID. This usually means "
-            "the startup auto-detection did not run or the token lacks "
-            "locations.readonly scope. Either pass company_id explicitly, set "
-            "GHL_COMPANY_ID in your config, or check that GHL_API_KEY and "
-            "GHL_LOCATION_ID are valid."
+            "Could not determine the company ID. Set GHL_COMPANY_ID, pass "
+            "company_id explicitly, or confirm GHL_API_KEY and "
+            "GHL_LOCATION_ID are valid so startup auto-detection can run."
         )
 
 

@@ -29,13 +29,8 @@ Most tool names are unchanged. The few normalizations:
 
 | v1 | v2 | Reason |
 |---|---|---|
-| `ghl_get_account_info` | `ghl_companies_get` | Match `{resource}_{action}` pattern |
 | _(no equivalent)_ | `ghl_custom_fields_create` / `_update` / `_delete` | Was missing in v1 |
 | _(no equivalent)_ | `ghl_pipelines_create` / `_update` / `_delete` | Was missing in v1 |
-| _(no equivalent)_ | `ghl_snapshots_*` (4 tools) | Was missing in v1 |
-| _(no equivalent)_ | `ghl_locations_create` / `_update` / `_delete` | Was missing in v1 |
-| _(no equivalent)_ | `ghl_saas_*` (5 tools) | Was missing in v1 |
-| _(no equivalent)_ | `ghl_webhooks_*` (4 tools) | Was missing in v1 |
 | _(no equivalent)_ | `ghl_funnels_*` (2 tools) | Was missing in v1 |
 
 ### Response shape
@@ -111,7 +106,6 @@ GHL_LOCATION_ID=...
 GHL_BASE_URL=https://services.leadconnectorhq.com   # optional
 
 # New in v2
-GHL_COMPANY_ID=...                # optional; auto-detected at startup for agency tools
 GHL_API_VERSION=2021-07-28         # was hardcoded in v1
 GHL_TIMEOUT=30                     # configurable now
 GHL_MAX_RETRIES=3                  # configurable now
@@ -165,7 +159,7 @@ pip install -e ".[dev]"
 pytest
 ```
 
-You should see the imports test pass for all 18 tool modules and the client tests pass against mocked responses.
+You should see the imports test pass for all 13 tool modules and the client tests pass against mocked responses.
 
 ### 8. Test against live API
 
@@ -179,7 +173,7 @@ If you see a `TOKEN EXPIRED OR INVALID` banner, your PIT has expired. Regenerate
 
 ### 9. Restart Claude
 
-Restart Claude Code or Claude Desktop to pick up the new server. You should see 78 tools instead of v1's 46.
+Restart Claude Code or Claude Desktop to pick up the new server. You should see 59 tools instead of v1's 46.
 
 ---
 

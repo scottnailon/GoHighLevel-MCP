@@ -40,12 +40,7 @@ TOOL_MODULES = [
     "ghl_mcp.tools.users",
     "ghl_mcp.tools.workflows",
     "ghl_mcp.tools.forms",
-    "ghl_mcp.tools.snapshots",
-    "ghl_mcp.tools.locations",
-    "ghl_mcp.tools.webhooks",
     "ghl_mcp.tools.funnels",
-    "ghl_mcp.tools.companies",
-    "ghl_mcp.tools.saas",
 ]
 
 
@@ -59,18 +54,30 @@ def test_module_imports(module_name: str) -> None:
 def test_tools_register_function() -> None:
     """Every tool module exposes a callable ``register`` function."""
     from ghl_mcp.tools import (
-        appointments, calendars, companies, contacts, conversations,
-        custom_fields, forms, funnels, locations, messaging, opportunities,
-        pipelines, saas, snapshots, tags, users, webhooks, workflows,
+        appointments, calendars, contacts, conversations,
+        custom_fields, forms, funnels, messaging, opportunities,
+        pipelines, tags, users, workflows,
     )
     modules = [
-        appointments, calendars, companies, contacts, conversations,
-        custom_fields, forms, funnels, locations, messaging, opportunities,
-        pipelines, saas, snapshots, tags, users, webhooks, workflows,
+        appointments, calendars, contacts, conversations,
+        custom_fields, forms, funnels, messaging, opportunities,
+        pipelines, tags, users, workflows,
     ]
     for mod in modules:
         assert hasattr(mod, "register"), f"{mod.__name__} missing `register`"
         assert callable(mod.register), f"{mod.__name__}.register is not callable"
+
+
+def test_no_agency_only_tool_leaked_in() -> None:
+    """Agency-scoped modules (cross-location listing, sub-account lifecycle,
+    SaaS billing, snapshots, webhooks) must never be present in this
+    client-facing build — they live in a separate, private repo."""
+    from ghl_mcp.tools import __all__ as registered
+
+    forbidden = {"locations", "companies", "saas", "snapshots", "webhooks"}
+    assert not (set(registered) & forbidden), (
+        f"Agency-only module leaked into the client build: {set(registered) & forbidden}"
+    )
 
 
 def test_server_is_fastmcp() -> None:

@@ -92,8 +92,8 @@ asyncio.run(c())
 Remove-Item Env:\GHL_API_KEY
 Remove-Item Env:\GHL_LOCATION_ID
 Write-Host "Tools registered: $ToolCount"
-if ([int]$ToolCount -lt 70) {
-    Write-Host "WARN: Expected ~78 tools, got $ToolCount" -ForegroundColor Yellow
+if ([int]$ToolCount -lt 50) {
+    Write-Host "WARN: Expected ~59 tools, got $ToolCount" -ForegroundColor Yellow
 }
 
 # 6. Print config snippet (forward slashes work fine in JSON on Windows)
@@ -122,10 +122,6 @@ Write-Host "----------- COPY BELOW -----------" -ForegroundColor Yellow
 }
 "@
 Write-Host "----------- COPY ABOVE -----------" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "Agency owners: those two values are all you need — your agency/company ID"
-Write-Host "is auto-detected at startup, so the agency tools (snapshots, SaaS, etc.)"
-Write-Host "work without any extra config."
 Write-Host ""
 Write-Host "Open the config file in Notepad:"
 Write-Host "  notepad `"$ConfigPath`""

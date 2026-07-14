@@ -65,8 +65,8 @@ async def c():
 asyncio.run(c())
 " 2>/dev/null)
 echo "Tools registered: $TOOL_COUNT"
-if [ "$TOOL_COUNT" -lt 70 ] 2>/dev/null; then
-    echo "WARN: Expected ~78 tools, got $TOOL_COUNT — install may be incomplete"
+if [ "$TOOL_COUNT" -lt 50 ] 2>/dev/null; then
+    echo "WARN: Expected ~59 tools, got $TOOL_COUNT — install may be incomplete"
 fi
 
 # 5. Print config snippet
@@ -93,10 +93,6 @@ cat <<JSON
 }
 JSON
 echo "----------- COPY ABOVE -----------"
-echo ""
-echo "Agency owners: those two values are all you need — your agency/company ID"
-echo "is auto-detected at startup, so the agency tools (snapshots, SaaS, etc.)"
-echo "work without any extra config."
 echo ""
 echo "Open the config file with:"
 echo "  open -e ~/Library/Application\\ Support/Claude/claude_desktop_config.json"

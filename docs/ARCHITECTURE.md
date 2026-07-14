@@ -98,7 +98,7 @@ The default is Markdown for context efficiency. Agents pass `response_format="js
 
 ## Why modular tools/ package
 
-The v1 was one 1,061-line file. The v2 splits into 18 modules in `ghl_mcp/tools/`. Why:
+The v1 was one 1,061-line file. The v2 splits into 13 modules in `ghl_mcp/tools/`. Why:
 
 - Each module is focused on one resource type — easy to find and audit.
 - New API endpoints can be added by editing one small file rather than navigating a giant if-chain.
@@ -126,5 +126,4 @@ For honesty, here's what we chose *not* to do:
 - **Auto-pagination**: We don't transparently fetch all pages. Agents pass `skip` to fetch the next page. Reason: huge result sets would blow the context window. Better to surface pagination metadata and let the agent decide how many pages it actually needs.
 - **OAuth 2.0 flow**: Only Private Integration Token auth is supported. OAuth is more secure for marketplace apps but adds significant complexity (refresh tokens, scope management, callback URLs) for marginal benefit in a single-tenant internal tool. If a marketplace app distribution is needed later, OAuth can be added without changing the tool surface.
 - **Caching**: No tool result is cached. Reason: GHL data is mutable and stale results would be confusing. Modern GHL's response times are fast enough that caching isn't worth the complexity.
-- **Webhooks→MCP bridge**: We expose webhook *management* (CRUD), but receiving webhooks is out of scope — that's a separate stateful service. The MCP server is request/response only.
 - **Bulk operations**: No `ghl_contacts_bulk_update` or similar. Reason: GHL's API doesn't natively support most bulk operations, so a "bulk" tool would internally loop through individual API calls — better to let the agent loop explicitly so it can handle partial failures and respect rate limits.

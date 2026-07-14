@@ -1,6 +1,6 @@
 # GoHighLevel MCP — Tool Reference
 
-**Total tools:** 78 across 18 categories.
+**Total tools:** 59 across 13 categories.
 
 Auto-generated from FastMCP registration. Regenerate with `python -m scripts.gen_tools_doc`.
 
@@ -8,21 +8,16 @@ Auto-generated from FastMCP registration. Regenerate with `python -m scripts.gen
 
 - [appointments](#appointments) — 4 tools
 - [calendars](#calendars) — 6 tools
-- [companies](#companies) — 1 tools
 - [contacts](#contacts) — 12 tools
 - [conversations](#conversations) — 4 tools
 - [custom](#custom) — 5 tools
 - [forms](#forms) — 2 tools
 - [funnels](#funnels) — 2 tools
-- [locations](#locations) — 5 tools
 - [messages](#messages) — 4 tools
 - [opportunities](#opportunities) — 8 tools
 - [pipelines](#pipelines) — 5 tools
-- [saas](#saas) — 5 tools
-- [snapshots](#snapshots) — 4 tools
 - [tags](#tags) — 1 tools
 - [users](#users) — 4 tools
-- [webhooks](#webhooks) — 4 tools
 - [workflows](#workflows) — 2 tools
 
 ---
@@ -90,14 +85,6 @@ List all calendars on a location.
 *Update calendar* · ✏️ mutating ♻️ idempotent
 
 Update calendar configuration.
-
-## companies
-
-### `ghl_companies_get`
-
-*Get agency/company details* · 🔒 read-only ♻️ idempotent
-
-Get details about your GHL agency/company.
 
 ## contacts
 
@@ -223,7 +210,7 @@ Get full details for a single custom field, including its options for picklist t
 
 *List custom fields* · 🔒 read-only ♻️ idempotent
 
-List all custom fields configured on a location, for either contact or opportunity model.
+List all custom fields configured on a location.
 
 ### `ghl_custom_fields_update`
 
@@ -258,38 +245,6 @@ List all pages within a specific funnel.
 *List funnels* · 🔒 read-only ♻️ idempotent
 
 List all funnels on a location.
-
-## locations
-
-### `ghl_locations_create`
-
-*Create new sub-account* · ✏️ mutating
-
-Create a new sub-account (location) under your agency.
-
-### `ghl_locations_delete`
-
-*Delete sub-account* · ✏️ mutating ⚠️ destructive ♻️ idempotent
-
-Permanently delete a sub-account. THIS IS DESTRUCTIVE — all data, contacts, and configuration are lost.
-
-### `ghl_locations_get`
-
-*Get sub-account details* · 🔒 read-only ♻️ idempotent
-
-Get full configuration for a single sub-account by its location ID.
-
-### `ghl_locations_list`
-
-*List sub-accounts* · 🔒 read-only ♻️ idempotent
-
-List all sub-accounts (locations) under your agency.
-
-### `ghl_locations_update`
-
-*Update sub-account* · ✏️ mutating ♻️ idempotent
-
-Update business profile fields on an existing sub-account.
 
 ## messages
 
@@ -399,64 +354,6 @@ List all sales pipelines configured on a location, including their stages.
 
 Update a pipeline's name or stages. Replacing ``stages`` replaces ALL stages — be careful with existing opportunities.
 
-## saas
-
-### `ghl_saas_disable`
-
-*Disable SaaS on sub-account* · ✏️ mutating ⚠️ destructive ♻️ idempotent
-
-Disable SaaS billing on a sub-account, ending the subscription. The sub-account itself is not deleted.
-
-### `ghl_saas_enable`
-
-*Enable SaaS on sub-account* · ✏️ mutating
-
-Enable SaaS billing on a sub-account, optionally attaching a Stripe customer and selecting a plan.
-
-### `ghl_saas_get_subscription`
-
-*Get sub-account SaaS subscription* · 🔒 read-only ♻️ idempotent
-
-Get the current SaaS subscription details for a sub-account: plan, status, next billing date, wallet balance.
-
-### `ghl_saas_update_plan`
-
-*Change sub-account plan tier* · ✏️ mutating ♻️ idempotent
-
-Move a sub-account to a different plan tier. Useful for upgrading or downgrading clients.
-
-### `ghl_saas_wallet_adjust`
-
-*Adjust sub-account wallet balance* · ✏️ mutating
-
-Manually credit or debit a sub-account's GHL wallet (used for SMS/email/AI usage).
-
-## snapshots
-
-### `ghl_snapshots_get`
-
-*Get snapshot details* · 🔒 read-only ♻️ idempotent
-
-Get full details for a snapshot, including the assets it contains.
-
-### `ghl_snapshots_import`
-
-*Import snapshot into sub-account* · ✏️ mutating
-
-Import (load) a snapshot into a target sub-account.
-
-### `ghl_snapshots_list`
-
-*List snapshots* · 🔒 read-only ♻️ idempotent
-
-List all snapshots available to your agency.
-
-### `ghl_snapshots_share_link`
-
-*Generate snapshot share link* · ✏️ mutating ♻️ idempotent
-
-Generate a shareable link to a snapshot, allowing other agencies to clone it.
-
 ## tags
 
 ### `ghl_tags_list`
@@ -490,32 +387,6 @@ List all users with access to a location.
 *Update user* · ✏️ mutating ♻️ idempotent
 
 Update a user's profile fields.
-
-## webhooks
-
-### `ghl_webhooks_create`
-
-*Create webhook* · ✏️ mutating
-
-Create a new webhook subscription.
-
-### `ghl_webhooks_delete`
-
-*Delete webhook* · ✏️ mutating ⚠️ destructive ♻️ idempotent
-
-Delete a webhook subscription. Stops all further event deliveries to the URL.
-
-### `ghl_webhooks_list`
-
-*List webhooks* · 🔒 read-only ♻️ idempotent
-
-List all webhooks configured for a location.
-
-### `ghl_webhooks_update`
-
-*Update webhook* · ✏️ mutating ♻️ idempotent
-
-Update a webhook's URL, events, name, or enabled state.
 
 ## workflows
 

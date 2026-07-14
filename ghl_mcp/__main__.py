@@ -143,10 +143,9 @@ async def _check_token_live(logger: logging.Logger) -> None:
 def _auto_detect_company_id(logger: logging.Logger, body: bytes) -> None:
     """Read ``companyId`` from a location response and record it.
 
-    The location record returned by GET /locations/{id} carries the agency's
-    company ID, so agency owners never need to look it up manually. If the user
-    has set GHL_COMPANY_ID explicitly, that takes precedence and we only log;
-    otherwise the detected value becomes the fallback used by agency tools.
+    Every location record carries its parent company ID. No tool in this
+    build currently needs it, but it's cheap to capture at DEBUG level in
+    case a future client-safe tool wants it — nothing here is user-facing.
 
     Best-effort: any parse problem is logged at DEBUG and ignored — a failure
     here must never prevent the server from starting.
@@ -166,18 +165,14 @@ def _auto_detect_company_id(logger: logging.Logger, body: bytes) -> None:
     if settings.company_id:
         # User pinned an explicit value; respect it, just note any mismatch.
         if settings.company_id != company_id:
-            logger.info(
-                "GHL_COMPANY_ID is set to %s but the location belongs to agency %s — using the configured value.",
+            logger.debug(
+                "GHL_COMPANY_ID is set to %s but the location belongs to %s — using the configured value.",
                 settings.company_id, company_id,
             )
         return
 
     set_resolved_company_id(company_id)
-    logger.info(
-        "Agency/company ID auto-detected from your location: %s "
-        "(agency tools are enabled; set GHL_COMPANY_ID to pin this value).",
-        company_id,
-    )
+    logger.debug("Company ID auto-detected from your location: %s", company_id)
 
 
 def _check_credentials(logger: logging.Logger) -> None:
@@ -187,16 +182,6 @@ def _check_credentials(logger: logging.Logger) -> None:
         missing.append("GHL_API_KEY")
     if not settings.location_id:
         missing.append("GHL_LOCATION_ID")
-
-    if not missing:
-        # Both required credentials are present. GHL_COMPANY_ID is optional —
-        # if unset, the live pre-flight check below auto-detects it from the
-        # location, so agency tools still work. Don't warn here.
-        if not settings.company_id:
-            logger.info(
-                "GHL_COMPANY_ID not set — it will be auto-detected from your location at startup. "
-                "Set it in your config env block only if you want to pin a specific agency."
-            )
         return
 
     sep = "=" * 60
