@@ -53,13 +53,37 @@ class PaginationInput(BaseToolInput):
 
 
 class LocationScopedInput(BaseToolInput):
-    """Mixin: tools that operate on a single sub-account (location)."""
+    """Mixin: tools that operate on a single sub-account (location) and send
+    ``locationId`` in the request itself (list/search/create)."""
 
     location_id: str | None = Field(
         default=None,
         description=(
-            "GHL Location/Sub-Account ID. Defaults to GHL_LOCATION_ID from "
-            "environment if not provided."
+            "GHL Location/Sub-Account ID. Selects which configured client's "
+            "credentials to use. Omit to use the configured default client, "
+            "or the sole configured client if only one exists."
+        ),
+    )
+    response_format: ResponseFormat = Field(
+        default=ResponseFormat.MARKDOWN,
+        description="Output format: 'markdown' (concise) or 'json' (structured).",
+    )
+
+
+class ByIdInput(BaseToolInput):
+    """Mixin: tools that address a resource purely by its own ID (get/update/
+    delete by contact_id, opportunity_id, etc.) — the GHL endpoint itself
+    needs no locationId, but multiple clients may be configured, so
+    location_id is still needed to select whose credentials authenticate
+    the call."""
+
+    location_id: str | None = Field(
+        default=None,
+        description=(
+            "GHL Location/Sub-Account ID whose credentials should make this "
+            "call. Omit to use the configured default client, or the sole "
+            "configured client if only one exists. Required if multiple "
+            "clients are configured and none is set as default."
         ),
     )
     response_format: ResponseFormat = Field(

@@ -9,6 +9,7 @@ Run with: ``pytest tests/test_tools.py -v``
 
 from __future__ import annotations
 
+import importlib
 import json
 from typing import Any
 from unittest.mock import AsyncMock, patch
@@ -35,9 +36,12 @@ LOCATION_ID = "test-loc"
 
 @pytest.fixture
 def ghl_client() -> GHLClient:
-    """A GHLClient wired to the test base URL with no retries."""
+    """A GHLClient wired to the test base URL with no retries.
+
+    Auth is resolved per-request from settings (see patch_settings below),
+    not passed to the constructor — matches production.
+    """
     return GHLClient(
-        api_key=API_KEY,
         base_url=BASE_URL,
         api_version="2021-07-28",
         max_retries=0,
@@ -68,18 +72,45 @@ def patch_get_client(ghl_client: GHLClient):
         p.stop()
 
 
+
+# Every module that does `from ghl_mcp.config import settings` binds its own
+# name at import time — reassigning ghl_mcp.config.settings after that point
+# does NOT change what those modules see. Each must be patched individually.
+_SETTINGS_IMPORTERS = [
+    "ghl_mcp.client",
+    "ghl_mcp.tools.contacts",
+    "ghl_mcp.tools.opportunities",
+    "ghl_mcp.tools.conversations",
+    "ghl_mcp.tools.workflows",
+    "ghl_mcp.tools.pipelines",
+    "ghl_mcp.tools.users",
+    "ghl_mcp.tools.calendars",
+    "ghl_mcp.tools.tags",
+    "ghl_mcp.tools.funnels",
+    "ghl_mcp.tools.forms",
+    "ghl_mcp.tools.custom_fields",
+]
+
+
 @pytest.fixture(autouse=True)
 def patch_settings(monkeypatch):
-    """Override the module-level settings singleton for every test."""
-    monkeypatch.setenv("GHL_API_KEY", API_KEY)
-    monkeypatch.setenv("GHL_LOCATION_ID", LOCATION_ID)
-    # Reload settings so the tools see the patched env vars.
+    """Override the settings every module sees for every test.
+
+    Builds a fresh Settings with one client (location_id=LOCATION_ID,
+    api_key=API_KEY) and patches it into ghl_mcp.config plus every module
+    that imported `settings` by name — see _SETTINGS_IMPORTERS above.
+    """
     import ghl_mcp.config as cfg
-    cfg.settings = cfg._load_settings()
+    from ghl_mcp.config import ClientAccount, Settings
+
+    test_settings = Settings(
+        clients={LOCATION_ID: ClientAccount(location_id=LOCATION_ID, api_key=API_KEY, label=LOCATION_ID)},
+    )
+    monkeypatch.setattr(cfg, "settings", test_settings)
+    for module_name in _SETTINGS_IMPORTERS:
+        module = importlib.import_module(module_name)
+        monkeypatch.setattr(module, "settings", test_settings)
     yield
-    # Restore to avoid leaking state — _load_settings() reads os.environ which
-    # monkeypatch already restores, so we just reload once more after teardown.
-    cfg.settings = cfg._load_settings()
 
 
 # ---------------------------------------------------------------------------

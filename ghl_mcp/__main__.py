@@ -10,7 +10,7 @@ import urllib.error
 import urllib.request
 
 from ghl_mcp.client import USER_AGENT
-from ghl_mcp.config import set_resolved_company_id, settings
+from ghl_mcp.config import ClientAccount, set_resolved_company_id, settings
 from ghl_mcp.server import mcp
 
 
@@ -26,40 +26,41 @@ def main() -> None:
     logger = logging.getLogger("ghl_mcp")
 
     _check_credentials(logger)
-    asyncio.run(_check_token_live(logger))
+    asyncio.run(_check_tokens_live(logger))
 
-    logger.info("Starting GoHighLevel MCP server v2.0.0 (location_id=%s)", settings.location_id or "unset")
+    client_summary = ", ".join(f"{c.label} ({lid})" for lid, c in settings.clients.items()) or "none configured"
+    logger.info("Starting GoHighLevel MCP server v2.0.0 (clients: %s)", client_summary)
 
     mcp.run()
 
 
-async def _check_token_live(logger: logging.Logger) -> None:
-    """Make a lightweight live API call to verify the PIT is valid.
+async def _check_tokens_live(logger: logging.Logger) -> None:
+    """Make a lightweight live API call per configured client to verify each
+    PIT is valid.
 
     Uses GET /locations/{location_id} — cheap, unambiguous, requires a working
-    token. Only runs when both credentials are present (i.e. after
-    _check_credentials has already confirmed they are set).
+    token. Runs once per configured client so a stale token for client B
+    doesn't go unnoticed just because client A's happens to be fine.
 
-    On success (200) it also reads ``companyId`` from the location record and
-    records it via :func:`set_resolved_company_id`, so agency tools work without
-    the user having to find their Agency ID by hand.
-
-    * 200 → token valid; auto-detect and stash the company ID.
-    * 401 → token expired or invalid; log a clear remediation banner.
+    * 200 → token valid; auto-detect and stash the company ID (first success
+      wins, since every client's PIT belongs to the same agency here).
+    * 401 → token expired or invalid; log a clear remediation banner naming
+      the affected client.
     * 403 → token present but missing required scopes; log a scopes banner.
     * Anything else (4xx other, 5xx, network error) → DEBUG only; never
-      blocks startup so that transient network hiccups don't prevent the server
-      from starting.
+      blocks startup so that transient network hiccups don't prevent the
+      server from starting.
     """
-    if not settings.api_key or not settings.location_id:
-        # Credentials are missing — _check_credentials already warned; skip.
-        return
+    for account in settings.clients.values():
+        await _check_token_live(logger, account)
 
-    url = f"{settings.base_url}/locations/{settings.location_id}"
+
+async def _check_token_live(logger: logging.Logger, account: ClientAccount) -> None:
+    url = f"{settings.base_url}/locations/{account.location_id}"
     req = urllib.request.Request(
         url,
         headers={
-            "Authorization": f"Bearer {settings.api_key}",
+            "Authorization": f"Bearer {account.api_key}",
             "Version": settings.api_version,
             "Accept": "application/json",
             # GHL sits behind Cloudflare, which blocks the default Python
@@ -79,64 +80,66 @@ async def _check_token_live(logger: logging.Logger) -> None:
         with await loop.run_in_executor(None, lambda: urllib.request.urlopen(req, timeout=10)) as resp:
             # 2xx — token is valid. Read the location record so we can
             # auto-detect the agency/company ID from it.
-            logger.debug("PIT pre-flight check passed (HTTP 2xx from /locations/%s)", settings.location_id)
+            logger.debug(
+                "PIT pre-flight check passed for %s (HTTP 2xx from /locations/%s)",
+                account.label, account.location_id,
+            )
             _auto_detect_company_id(logger, resp.read())
             return
     except urllib.error.HTTPError as exc:
         status_code = exc.code
     except Exception as exc:  # noqa: BLE001 — network errors, DNS failures, etc.
-        logger.debug("PIT pre-flight check skipped (network error: %s)", exc)
+        logger.debug("PIT pre-flight check skipped for %s (network error: %s)", account.label, exc)
         return
 
     if status_code == 401:
         logger.warning(sep)
-        logger.warning("GoHighLevel MCP — TOKEN EXPIRED OR INVALID")
+        logger.warning("GoHighLevel MCP — TOKEN EXPIRED OR INVALID (%s)", account.label)
         logger.warning(sep)
-        logger.warning("The live API check returned HTTP 401 Unauthorized.")
-        logger.warning("Your Private Integration Token (PIT) is either expired")
-        logger.warning("or has been revoked.")
+        logger.warning("The live API check for '%s' (%s) returned HTTP 401 Unauthorized.", account.label, account.location_id)
+        logger.warning("That client's Private Integration Token (PIT) is either")
+        logger.warning("expired or has been revoked.")
         logger.warning("")
         logger.warning("Private Integration Tokens expire after 90 days of non-use.")
         logger.warning("")
-        logger.warning("To regenerate your token:")
-        logger.warning("  1. Log in to GoHighLevel")
+        logger.warning("To regenerate it:")
+        logger.warning("  1. Log in to GoHighLevel as that client's sub-account")
         logger.warning("  2. Go to Settings → Private Integrations")
         logger.warning("  3. Find your integration and click 'Regenerate Token'")
         logger.warning("     (or create a new integration if needed)")
         logger.warning("  4. Copy the new token — it starts with 'pit-'")
-        logger.warning("  5. Update GHL_API_KEY in your Claude Desktop config:")
-        logger.warning("       Mac:     ~/Library/Application Support/Claude/claude_desktop_config.json")
-        logger.warning("       Windows: %%APPDATA%%\\Claude\\claude_desktop_config.json")
-        logger.warning("  6. Restart Claude Desktop")
+        logger.warning("  5. Update this client's entry in GHL_CLIENTS (or GHL_API_KEY")
+        logger.warning("     if this is your legacy single-client setup)")
+        logger.warning("  6. Restart Claude Desktop / Claude Code")
         logger.warning("")
-        logger.warning("The server will start but all tool calls will fail until")
-        logger.warning("the token is replaced.")
+        logger.warning("The server will start but calls for this client will fail")
+        logger.warning("until the token is replaced.")
         logger.warning(sep)
     elif status_code == 403:
         logger.warning(sep)
-        logger.warning("GoHighLevel MCP — TOKEN HAS INSUFFICIENT SCOPES")
+        logger.warning("GoHighLevel MCP — TOKEN HAS INSUFFICIENT SCOPES (%s)", account.label)
         logger.warning(sep)
-        logger.warning("The live API check returned HTTP 403 Forbidden.")
-        logger.warning("Your Private Integration Token does not have the required")
-        logger.warning("API scopes to access this location.")
+        logger.warning("The live API check for '%s' returned HTTP 403 Forbidden.", account.label)
+        logger.warning("That client's Private Integration Token does not have the")
+        logger.warning("required API scopes.")
         logger.warning("")
         logger.warning("To fix this:")
-        logger.warning("  1. Log in to GoHighLevel")
+        logger.warning("  1. Log in to GoHighLevel as that client's sub-account")
         logger.warning("  2. Go to Settings → Private Integrations")
         logger.warning("  3. Find your integration and click 'Edit'")
         logger.warning("  4. Enable all required scopes (see INSTALL.md for the")
         logger.warning("     full list) and save")
-        logger.warning("  5. Regenerate the token, copy the new 'pit-' value")
-        logger.warning("  6. Update GHL_API_KEY in your Claude Desktop config and")
-        logger.warning("     restart Claude Desktop")
+        logger.warning("  5. Regenerate the token, copy the new 'pit-' value, and")
+        logger.warning("     update this client's entry in GHL_CLIENTS")
+        logger.warning("  6. Restart Claude Desktop / Claude Code")
         logger.warning("")
-        logger.warning("The server will start but tool calls may fail with")
-        logger.warning("permission errors until the scopes are corrected.")
+        logger.warning("The server will start but calls for this client may fail")
+        logger.warning("with permission errors until the scopes are corrected.")
         logger.warning(sep)
     else:
         logger.debug(
-            "PIT pre-flight check returned HTTP %s — non-blocking, server will start normally.",
-            status_code,
+            "PIT pre-flight check for %s returned HTTP %s — non-blocking, server will start normally.",
+            account.label, status_code,
         )
 
 
@@ -176,47 +179,36 @@ def _auto_detect_company_id(logger: logging.Logger, body: bytes) -> None:
 
 
 def _check_credentials(logger: logging.Logger) -> None:
-    """Warn to stderr if required credentials are missing, with setup instructions."""
-    missing = []
-    if not settings.api_key:
-        missing.append("GHL_API_KEY")
-    if not settings.location_id:
-        missing.append("GHL_LOCATION_ID")
+    """Warn to stderr if no clients are configured, with setup instructions."""
+    if settings.clients:
         return
 
     sep = "=" * 60
     logger.warning(sep)
     logger.warning("GoHighLevel MCP — MISSING CREDENTIALS")
     logger.warning(sep)
-    logger.warning("The following environment variables are not set: %s", ", ".join(missing))
+    logger.warning("No clients are configured — neither GHL_CLIENTS nor the legacy")
+    logger.warning("GHL_API_KEY / GHL_LOCATION_ID pair are set.")
     logger.warning("")
-    logger.warning("The server will start but all tool calls will fail until")
-    logger.warning("these are configured. Here's how to get them:")
+    logger.warning("The server will start but all tool calls will fail until at")
+    logger.warning("least one client is configured. Here's how:")
     logger.warning("")
-    if "GHL_API_KEY" in missing:
-        logger.warning("  GHL_API_KEY (Private Integration Token):")
-        logger.warning("    1. Log in to GoHighLevel")
-        logger.warning("    2. Go to Settings → Private Integrations")
-        logger.warning("    3. Click 'Create new Integration'")
-        logger.warning("    4. Enable the required scopes (see INSTALL.md)")
-        logger.warning("    5. Copy the token — it starts with 'pit-'")
-        logger.warning("")
-    if "GHL_LOCATION_ID" in missing:
-        logger.warning("  GHL_LOCATION_ID (Sub-Account / Location ID):")
-        logger.warning("    1. Log in to GoHighLevel")
-        logger.warning("    2. Go to Settings → Business Profile")
-        logger.warning("    3. Copy the Location ID from the page or URL")
-        logger.warning("")
+    logger.warning("  Single client — set both:")
+    logger.warning('    "GHL_API_KEY": "pit-your-token-here",')
+    logger.warning('    "GHL_LOCATION_ID": "your-location-id-here"')
+    logger.warning("")
+    logger.warning("  Multiple clients — set GHL_CLIENTS to a JSON map:")
+    logger.warning('    "GHL_CLIENTS": \'{"loc-id-1": {"api_key": "pit-...", "label": "Client A"}, ')
+    logger.warning('                      "loc-id-2": {"api_key": "pit-...", "label": "Client B"}}\'')
+    logger.warning("")
+    logger.warning("Each PIT is generated per-client at:")
+    logger.warning("  GoHighLevel → Settings → Private Integrations (as that client's sub-account)")
+    logger.warning("")
     logger.warning("Add these to the 'env' block in your Claude Desktop config:")
     logger.warning("  Mac:     ~/Library/Application Support/Claude/claude_desktop_config.json")
     logger.warning("  Windows: %%APPDATA%%\\Claude\\claude_desktop_config.json")
     logger.warning("")
-    logger.warning('  "env": {')
-    logger.warning('    "GHL_API_KEY": "pit-your-token-here",')
-    logger.warning('    "GHL_LOCATION_ID": "your-location-id-here"')
-    logger.warning('  }')
-    logger.warning("")
-    logger.warning("Then restart Claude Desktop.")
+    logger.warning("Then restart Claude Desktop / Claude Code.")
     logger.warning(sep)
 
 

@@ -9,16 +9,15 @@ from pydantic import Field
 from ghl_mcp.client import get_client
 from ghl_mcp.config import settings
 from ghl_mcp.formatters import format_response
-from ghl_mcp.models import BaseToolInput, LocationScopedInput, ResponseFormat
+from ghl_mcp.models import ByIdInput, LocationScopedInput, ResponseFormat
 
 
 class CalendarsListInput(LocationScopedInput):
     pass
 
 
-class CalendarGetInput(BaseToolInput):
+class CalendarGetInput(ByIdInput):
     calendar_id: str = Field(..., min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
 class CalendarCreateInput(LocationScopedInput):
@@ -32,7 +31,7 @@ class CalendarCreateInput(LocationScopedInput):
     min_booking_notice: int = Field(default=0, ge=0, description="Minimum hours of advance notice required.")
 
 
-class CalendarUpdateInput(BaseToolInput):
+class CalendarUpdateInput(ByIdInput):
     calendar_id: str = Field(..., min_length=1)
     name: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
@@ -40,16 +39,15 @@ class CalendarUpdateInput(BaseToolInput):
     slot_interval: int | None = Field(default=None, ge=5, le=480)
 
 
-class CalendarDeleteInput(BaseToolInput):
+class CalendarDeleteInput(ByIdInput):
     calendar_id: str = Field(..., min_length=1)
 
 
-class CalendarFreeSlotsInput(BaseToolInput):
+class CalendarFreeSlotsInput(ByIdInput):
     calendar_id: str = Field(..., min_length=1, description="Get from `ghl_calendars_list`.")
     start_date: str = Field(..., description="Start of the date range. ISO 8601 datetime (e.g. '2026-06-01T00:00:00Z') or Unix timestamp in milliseconds.")
     end_date: str = Field(..., description="End of the date range. ISO 8601 datetime (e.g. '2026-06-07T23:59:59Z') or Unix timestamp in milliseconds.")
     timezone: str | None = Field(default=None, description="IANA timezone name for returned slot times, e.g. 'Australia/Sydney', 'America/New_York'. Invalid timezones are rejected by GHL.")
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
 def register(mcp) -> None:  # noqa: ANN001
@@ -57,24 +55,24 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_calendars_list(params: CalendarsListInput) -> str:
         """List all calendars on a location."""
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
-        result = await client.get("/calendars/", params={"locationId": location_id})
+        account = settings.resolve_client(params.location_id)
+        result = await client.get("/calendars/", params={"locationId": account.location_id}, location_id=account.location_id)
         return format_response(result, params.response_format)
 
     @mcp.tool(name="ghl_calendars_get", annotations={"title": "Get calendar", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     async def ghl_calendars_get(params: CalendarGetInput) -> str:
         """Get full configuration of a calendar by ID."""
         client = await get_client()
-        result = await client.get(f"/calendars/{params.calendar_id}")
+        result = await client.get(f"/calendars/{params.calendar_id}", location_id=params.location_id)
         return format_response(result, params.response_format)
 
     @mcp.tool(name="ghl_calendars_create", annotations={"title": "Create calendar", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
     async def ghl_calendars_create(params: CalendarCreateInput) -> str:
         """Create a new calendar with bookable slot configuration."""
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
         body: dict[str, Any] = {
-            "locationId": location_id,
+            "locationId": account.location_id,
             "name": params.name,
             "slotDuration": params.slot_duration,
             "slotInterval": params.slot_interval,
@@ -84,7 +82,7 @@ def register(mcp) -> None:  # noqa: ANN001
         }
         if params.description: body["description"] = params.description
         if params.slug: body["slug"] = params.slug
-        result = await client.post("/calendars/", json=body)
+        result = await client.post("/calendars/", json=body, location_id=account.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(name="ghl_calendars_update", annotations={"title": "Update calendar", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
@@ -97,14 +95,14 @@ def register(mcp) -> None:  # noqa: ANN001
         if params.slot_duration is not None: body["slotDuration"] = params.slot_duration
         if params.slot_interval is not None: body["slotInterval"] = params.slot_interval
         if not body: return "No fields to update."
-        result = await client.put(f"/calendars/{params.calendar_id}", json=body)
+        result = await client.put(f"/calendars/{params.calendar_id}", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(name="ghl_calendars_delete", annotations={"title": "Delete calendar", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True})
     async def ghl_calendars_delete(params: CalendarDeleteInput) -> str:
         """Delete a calendar permanently. Existing appointments may also be cancelled."""
         client = await get_client()
-        await client.delete(f"/calendars/{params.calendar_id}")
+        await client.delete(f"/calendars/{params.calendar_id}", location_id=params.location_id)
         return f"Calendar {params.calendar_id} deleted."
 
     @mcp.tool(name="ghl_calendars_get_free_slots", annotations={"title": "Get available calendar slots", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
@@ -113,5 +111,5 @@ def register(mcp) -> None:  # noqa: ANN001
         client = await get_client()
         api_params: dict[str, Any] = {"startDate": params.start_date, "endDate": params.end_date}
         if params.timezone: api_params["timezone"] = params.timezone
-        result = await client.get(f"/calendars/{params.calendar_id}/free-slots", params=api_params)
+        result = await client.get(f"/calendars/{params.calendar_id}/free-slots", params=api_params, location_id=params.location_id)
         return format_response(result, params.response_format)

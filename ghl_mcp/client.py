@@ -1,7 +1,8 @@
 """Async HTTP client for the GoHighLevel API.
 
 Single source of truth for:
-- Authentication (Private Integration Token in Authorization header)
+- Authentication (Private Integration Token in Authorization header,
+  resolved per-request from the multi-client map — see config.py)
 - API version pinning
 - Rate-limit awareness (reads X-RateLimit-* response headers)
 - Exponential-backoff retry on 429 and transient 5xx
@@ -34,17 +35,21 @@ class GHLClient:
     Designed to be reused across many tool calls. Tools should use the
     module-level :func:`get_client` / context manager pattern rather than
     instantiating directly.
+
+    Authenticates per-request rather than with one fixed token: each call
+    resolves a client (location_id -> PIT) via ``settings.resolve_client``
+    and sets that PIT's Authorization header on just that request. This is
+    what lets one running server hold multiple clients' credentials at once
+    without one request's token leaking onto another client's request.
     """
 
     def __init__(
         self,
-        api_key: str | None = None,
         base_url: str | None = None,
         api_version: str | None = None,
         timeout: float | None = None,
         max_retries: int | None = None,
     ):
-        self._api_key = api_key or settings.require_api_key()
         self._base_url = (base_url or settings.base_url).rstrip("/")
         self._api_version = api_version or settings.api_version
         self._timeout = timeout if timeout is not None else settings.timeout
@@ -67,7 +72,7 @@ class GHLClient:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
                 timeout=self._timeout,
-                headers=self._default_headers(),
+                headers=self._base_headers(),
             )
 
     async def close(self) -> None:
@@ -75,9 +80,11 @@ class GHLClient:
             await self._client.aclose()
             self._client = None
 
-    def _default_headers(self) -> dict[str, str]:
+    def _base_headers(self) -> dict[str, str]:
+        """Headers common to every request. Authorization is NOT included
+        here — it's resolved per-request in :meth:`request`, since which
+        client's token applies can differ call to call."""
         return {
-            "Authorization": f"Bearer {self._api_key}",
             "Version": self._api_version,
             "Accept": "application/json",
             "Content-Type": "application/json",
@@ -97,8 +104,14 @@ class GHLClient:
         json: dict[str, Any] | None = None,
         files: dict[str, Any] | None = None,
         extra_headers: dict[str, str] | None = None,
+        location_id: str | None = None,
     ) -> dict[str, Any] | list[Any]:
         """Make an HTTP request and return parsed JSON.
+
+        ``location_id`` selects which configured client's PIT authenticates
+        this request (see ``Settings.resolve_client``). Omit it to use the
+        configured default / sole client — required if more than one client
+        is configured and none is set as default.
 
         Retries on 429 and 5xx with exponential backoff (2^attempt seconds,
         capped at 30s). Raises typed :class:`GHLError` on non-recoverable
@@ -106,6 +119,10 @@ class GHLClient:
         """
         await self._open()
         assert self._client is not None  # for type checkers
+
+        client_account = settings.resolve_client(location_id)
+        request_headers = dict(extra_headers or {})
+        request_headers["Authorization"] = f"Bearer {client_account.api_key}"
 
         # Strip None values from params — httpx encodes them as the literal
         # string "None" otherwise.
@@ -120,7 +137,7 @@ class GHLClient:
                     params=clean_params or None,
                     json=json,
                     files=files,
-                    headers=extra_headers,
+                    headers=request_headers,
                 )
             except httpx.TimeoutException as exc:
                 last_exception = exc
@@ -187,20 +204,20 @@ class GHLClient:
     # Convenience verbs
     # ---------------------------------------------------------------
 
-    async def get(self, path: str, **kwargs: Any) -> Any:
-        return await self.request("GET", path, **kwargs)
+    async def get(self, path: str, *, location_id: str | None = None, **kwargs: Any) -> Any:
+        return await self.request("GET", path, location_id=location_id, **kwargs)
 
-    async def post(self, path: str, **kwargs: Any) -> Any:
-        return await self.request("POST", path, **kwargs)
+    async def post(self, path: str, *, location_id: str | None = None, **kwargs: Any) -> Any:
+        return await self.request("POST", path, location_id=location_id, **kwargs)
 
-    async def put(self, path: str, **kwargs: Any) -> Any:
-        return await self.request("PUT", path, **kwargs)
+    async def put(self, path: str, *, location_id: str | None = None, **kwargs: Any) -> Any:
+        return await self.request("PUT", path, location_id=location_id, **kwargs)
 
-    async def patch(self, path: str, **kwargs: Any) -> Any:
-        return await self.request("PATCH", path, **kwargs)
+    async def patch(self, path: str, *, location_id: str | None = None, **kwargs: Any) -> Any:
+        return await self.request("PATCH", path, location_id=location_id, **kwargs)
 
-    async def delete(self, path: str, **kwargs: Any) -> Any:
-        return await self.request("DELETE", path, **kwargs)
+    async def delete(self, path: str, *, location_id: str | None = None, **kwargs: Any) -> Any:
+        return await self.request("DELETE", path, location_id=location_id, **kwargs)
 
     # ---------------------------------------------------------------
     # Internals

@@ -13,16 +13,15 @@ from pydantic import Field
 from ghl_mcp.client import get_client
 from ghl_mcp.config import settings
 from ghl_mcp.formatters import format_response, md_table
-from ghl_mcp.models import BaseToolInput, LocationScopedInput, ResponseFormat
+from ghl_mcp.models import BaseToolInput, ByIdInput, LocationScopedInput, ResponseFormat
 
 
 class PipelinesListInput(LocationScopedInput):
     pass
 
 
-class PipelineGetInput(BaseToolInput):
+class PipelineGetInput(ByIdInput):
     pipeline_id: str = Field(..., min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
 class PipelineStage(BaseToolInput):
@@ -37,13 +36,13 @@ class PipelineCreateInput(LocationScopedInput):
     stages: list[PipelineStage] = Field(..., min_length=1, max_length=50)
 
 
-class PipelineUpdateInput(BaseToolInput):
+class PipelineUpdateInput(ByIdInput):
     pipeline_id: str = Field(..., min_length=1)
     name: str | None = Field(default=None, max_length=200)
     stages: list[PipelineStage] | None = Field(default=None, max_length=50)
 
 
-class PipelineDeleteInput(BaseToolInput):
+class PipelineDeleteInput(ByIdInput):
     pipeline_id: str = Field(..., min_length=1)
 
 
@@ -80,8 +79,8 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_pipelines_list(params: PipelinesListInput) -> str:
         """List all sales pipelines configured on a location, including their stages."""
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
-        result = await client.get("/opportunities/pipelines", params={"locationId": location_id})
+        account = settings.resolve_client(params.location_id)
+        result = await client.get("/opportunities/pipelines", params={"locationId": account.location_id}, location_id=account.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_pipelines)
 
     @mcp.tool(
@@ -91,7 +90,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_pipelines_get(params: PipelineGetInput) -> str:
         """Get full details of a single pipeline including all stages."""
         client = await get_client()
-        result = await client.get(f"/opportunities/pipelines/{params.pipeline_id}")
+        result = await client.get(f"/opportunities/pipelines/{params.pipeline_id}", location_id=params.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_pipeline_detail)
 
     @mcp.tool(
@@ -105,9 +104,9 @@ def register(mcp) -> None:  # noqa: ANN001
         new pipeline including assigned stage IDs.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
         body = {
-            "locationId": location_id,
+            "locationId": account.location_id,
             "name": params.name,
             "stages": [
                 {
@@ -119,7 +118,7 @@ def register(mcp) -> None:  # noqa: ANN001
                 for s in params.stages
             ],
         }
-        result = await client.post("/opportunities/pipelines", json=body)
+        result = await client.post("/opportunities/pipelines", json=body, location_id=account.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_pipeline_detail)
 
     @mcp.tool(
@@ -139,7 +138,7 @@ def register(mcp) -> None:  # noqa: ANN001
             ]
         if not body:
             return "No updates provided. Pass `name` and/or `stages`."
-        result = await client.put(f"/opportunities/pipelines/{params.pipeline_id}", json=body)
+        result = await client.put(f"/opportunities/pipelines/{params.pipeline_id}", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -149,5 +148,5 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_pipelines_delete(params: PipelineDeleteInput) -> str:
         """Delete a pipeline. All opportunities within it are also deleted. CANNOT BE UNDONE."""
         client = await get_client()
-        await client.delete(f"/opportunities/pipelines/{params.pipeline_id}")
+        await client.delete(f"/opportunities/pipelines/{params.pipeline_id}", location_id=params.location_id)
         return f"Pipeline {params.pipeline_id} deleted."

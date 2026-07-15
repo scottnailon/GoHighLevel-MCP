@@ -31,6 +31,6 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_tags_list(params: TagsListInput) -> str:
         """List all tags currently in use on a location."""
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
-        result = await client.get(f"/locations/{location_id}/tags")
+        account = settings.resolve_client(params.location_id)
+        result = await client.get(f"/locations/{account.location_id}/tags", location_id=account.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_tag_list)

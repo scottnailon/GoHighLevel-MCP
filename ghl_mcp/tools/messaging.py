@@ -8,21 +8,20 @@ from pydantic import Field
 
 from ghl_mcp.client import get_client
 from ghl_mcp.formatters import format_response
-from ghl_mcp.models import BaseToolInput, PaginationInput, ResponseFormat
+from ghl_mcp.models import ByIdInput, PaginationInput, ResponseFormat
 
 
-class MessagesListInput(PaginationInput):
+class MessagesListInput(ByIdInput, PaginationInput):
     conversation_id: str = Field(..., min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
-class SmsSendInput(BaseToolInput):
+class SmsSendInput(ByIdInput):
     contact_id: str = Field(..., min_length=1, description="Recipient contact ID. Get from `ghl_contacts_list`. Contact must have a valid E.164 phone number.")
     message: str = Field(..., min_length=1, max_length=1600, description="SMS body. Standard SMS is 160 chars; longer messages are automatically concatenated (up to 1600 chars).")
     from_number: str | None = Field(default=None, description="Sender E.164 phone number (e.g. +14155551234). Defaults to the location's primary number.")
 
 
-class EmailSendInput(BaseToolInput):
+class EmailSendInput(ByIdInput):
     contact_id: str = Field(..., min_length=1, description="Recipient contact ID. Get from `ghl_contacts_list`.")
     subject: str = Field(..., min_length=1, max_length=300)
     html: str | None = Field(default=None, max_length=200_000, description="HTML email body. At least one of `html` or `text` is required.")
@@ -32,7 +31,7 @@ class EmailSendInput(BaseToolInput):
     attachments: list[str] | None = Field(default=None, description="List of publicly accessible URLs to include as email attachments.")
 
 
-class WhatsAppSendInput(BaseToolInput):
+class WhatsAppSendInput(ByIdInput):
     contact_id: str = Field(..., min_length=1, description="Recipient contact ID. Get from `ghl_contacts_list`. WhatsApp Business must be configured on the location first.")
     message: str = Field(..., min_length=1, max_length=4000)
 
@@ -45,6 +44,7 @@ def register(mcp) -> None:  # noqa: ANN001
         result = await client.get(
             f"/conversations/{params.conversation_id}/messages",
             params={"limit": params.limit, "skip": params.skip},
+            location_id=params.location_id,
         )
         return format_response(result, params.response_format)
 
@@ -54,7 +54,7 @@ def register(mcp) -> None:  # noqa: ANN001
         client = await get_client()
         body: dict[str, Any] = {"type": "SMS", "contactId": params.contact_id, "message": params.message}
         if params.from_number: body["fromNumber"] = params.from_number
-        result = await client.post("/conversations/messages", json=body)
+        result = await client.post("/conversations/messages", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(name="ghl_messages_send_email", annotations={"title": "Send email", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
@@ -69,7 +69,7 @@ def register(mcp) -> None:  # noqa: ANN001
         if params.from_email: body["emailFrom"] = params.from_email
         if params.from_name: body["fromName"] = params.from_name
         if params.attachments: body["attachments"] = params.attachments
-        result = await client.post("/conversations/messages", json=body)
+        result = await client.post("/conversations/messages", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(name="ghl_messages_send_whatsapp", annotations={"title": "Send WhatsApp message", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
@@ -79,5 +79,6 @@ def register(mcp) -> None:  # noqa: ANN001
         result = await client.post(
             "/conversations/messages",
             json={"type": "WhatsApp", "contactId": params.contact_id, "message": params.message},
+            location_id=params.location_id,
         )
         return format_response(result, ResponseFormat.JSON)

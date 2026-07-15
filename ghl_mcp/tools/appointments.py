@@ -9,7 +9,7 @@ from pydantic import Field
 
 from ghl_mcp.client import get_client
 from ghl_mcp.formatters import format_response
-from ghl_mcp.models import BaseToolInput, ResponseFormat
+from ghl_mcp.models import ByIdInput, ResponseFormat
 
 
 class AppointmentStatus(str, Enum):
@@ -21,21 +21,19 @@ class AppointmentStatus(str, Enum):
     INVALID = "invalid"
 
 
-class AppointmentsListInput(BaseToolInput):
+class AppointmentsListInput(ByIdInput):
     calendar_id: str = Field(..., min_length=1, description="Get from `ghl_calendars_list`.")
     contact_id: str | None = Field(default=None, description="Filter to appointments for a specific contact. Get from `ghl_contacts_list`.")
     user_id: str | None = Field(default=None, description="Filter to appointments assigned to a specific user. Get from `ghl_users_list`.")
     start_date: str | None = Field(default=None, description="ISO 8601 UTC datetime, e.g. '2026-06-01T00:00:00Z'. Not a Unix timestamp.")
     end_date: str | None = Field(default=None, description="ISO 8601 UTC datetime, e.g. '2026-06-30T23:59:59Z'. Not a Unix timestamp.")
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
-class AppointmentGetInput(BaseToolInput):
+class AppointmentGetInput(ByIdInput):
     appointment_id: str = Field(..., min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
-class AppointmentCreateInput(BaseToolInput):
+class AppointmentCreateInput(ByIdInput):
     calendar_id: str = Field(..., min_length=1, description="Get from `ghl_calendars_list`.")
     contact_id: str = Field(..., min_length=1, description="Get from `ghl_contacts_list` or `ghl_contacts_upsert`.")
     start_time: str = Field(
@@ -52,7 +50,7 @@ class AppointmentCreateInput(BaseToolInput):
     appointment_status: AppointmentStatus = Field(default=AppointmentStatus.CONFIRMED)
 
 
-class AppointmentUpdateInput(BaseToolInput):
+class AppointmentUpdateInput(ByIdInput):
     appointment_id: str = Field(..., min_length=1)
     start_time: str | None = Field(
         default=None,
@@ -77,14 +75,14 @@ def register(mcp) -> None:  # noqa: ANN001
         if params.user_id: api_params["userId"] = params.user_id
         if params.start_date: api_params["startDate"] = params.start_date
         if params.end_date: api_params["endDate"] = params.end_date
-        result = await client.get("/calendars/events/appointments", params=api_params)
+        result = await client.get("/calendars/events/appointments", params=api_params, location_id=params.location_id)
         return format_response(result, params.response_format)
 
     @mcp.tool(name="ghl_appointments_get", annotations={"title": "Get appointment", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     async def ghl_appointments_get(params: AppointmentGetInput) -> str:
         """Get full details of a single appointment."""
         client = await get_client()
-        result = await client.get(f"/calendars/events/appointments/{params.appointment_id}")
+        result = await client.get(f"/calendars/events/appointments/{params.appointment_id}", location_id=params.location_id)
         return format_response(result, params.response_format)
 
     @mcp.tool(name="ghl_appointments_create", annotations={"title": "Book appointment", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True})
@@ -101,7 +99,7 @@ def register(mcp) -> None:  # noqa: ANN001
         if params.title: body["title"] = params.title
         if params.notes: body["notes"] = params.notes
         if params.assigned_user_id: body["assignedUserId"] = params.assigned_user_id
-        result = await client.post("/calendars/events/appointments", json=body)
+        result = await client.post("/calendars/events/appointments", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(name="ghl_appointments_update", annotations={"title": "Update appointment", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
@@ -116,5 +114,5 @@ def register(mcp) -> None:  # noqa: ANN001
         if params.appointment_status:
             body["appointmentStatus"] = params.appointment_status.value if hasattr(params.appointment_status, "value") else params.appointment_status
         if not body: return "No fields to update."
-        result = await client.put(f"/calendars/events/appointments/{params.appointment_id}", json=body)
+        result = await client.put(f"/calendars/events/appointments/{params.appointment_id}", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)

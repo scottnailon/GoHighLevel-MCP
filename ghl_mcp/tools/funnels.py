@@ -14,7 +14,7 @@ from pydantic import Field
 from ghl_mcp.client import get_client
 from ghl_mcp.config import settings
 from ghl_mcp.formatters import format_response, md_table
-from ghl_mcp.models import BaseToolInput, LocationScopedInput, ResponseFormat
+from ghl_mcp.models import ByIdInput, LocationScopedInput
 
 
 class FunnelsListInput(LocationScopedInput):
@@ -22,9 +22,8 @@ class FunnelsListInput(LocationScopedInput):
     category: str | None = Field(default=None)
 
 
-class FunnelPagesInput(BaseToolInput):
+class FunnelPagesInput(ByIdInput):
     funnel_id: str = Field(..., min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
 def _render_funnels(payload: dict[str, Any]) -> str:
@@ -58,16 +57,16 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_funnels_list(params: FunnelsListInput) -> str:
         """List all funnels on a location."""
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
-        api_params: dict[str, Any] = {"locationId": location_id}
+        account = settings.resolve_client(params.location_id)
+        api_params: dict[str, Any] = {"locationId": account.location_id}
         if params.type: api_params["type"] = params.type
         if params.category: api_params["category"] = params.category
-        result = await client.get("/funnels/funnel/list", params=api_params)
+        result = await client.get("/funnels/funnel/list", params=api_params, location_id=account.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_funnels)
 
     @mcp.tool(name="ghl_funnels_get_pages", annotations={"title": "List funnel pages", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
     async def ghl_funnels_get_pages(params: FunnelPagesInput) -> str:
         """List all pages within a specific funnel."""
         client = await get_client()
-        result = await client.get(f"/funnels/page", params={"funnelId": params.funnel_id})
+        result = await client.get(f"/funnels/page", params={"funnelId": params.funnel_id}, location_id=params.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_pages)

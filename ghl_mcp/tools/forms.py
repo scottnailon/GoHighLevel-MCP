@@ -61,8 +61,8 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_forms_list(params: FormsListInput) -> str:
         """List all forms configured on a location."""
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
-        result = await client.get("/forms/", params={"locationId": location_id})
+        account = settings.resolve_client(params.location_id)
+        result = await client.get("/forms/", params={"locationId": account.location_id}, location_id=account.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_forms_list)
 
     @mcp.tool(name="ghl_forms_get_submissions", annotations={"title": "List form submissions", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True})
@@ -73,16 +73,16 @@ def register(mcp) -> None:  # noqa: ANN001
         into the kickoff workflow.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
         api_params: dict[str, Any] = {
-            "locationId": location_id,
+            "locationId": account.location_id,
             "limit": params.limit,
             "skip": params.skip,
         }
         if params.form_id: api_params["formId"] = params.form_id
         if params.start_date: api_params["startAt"] = params.start_date
         if params.end_date: api_params["endAt"] = params.end_date
-        result = await client.get("/forms/submissions", params=api_params)
+        result = await client.get("/forms/submissions", params=api_params, location_id=account.location_id)
         subs = result.get("submissions", result.get("items", []))
         page = build_pagination_response(
             subs,

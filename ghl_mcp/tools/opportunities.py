@@ -16,7 +16,7 @@ from ghl_mcp.formatters import (
     md_pagination_footer,
     md_table,
 )
-from ghl_mcp.models import BaseToolInput, LocationScopedInput, PaginationInput, ResponseFormat
+from ghl_mcp.models import ByIdInput, LocationScopedInput, PaginationInput, ResponseFormat
 from ghl_mcp.pagination import build_pagination_response, extract_total
 
 
@@ -36,9 +36,8 @@ class OpportunitiesListInput(LocationScopedInput, PaginationInput):
     query: str | None = Field(default=None, max_length=200, description="Free-text search across opportunity name.")
 
 
-class OpportunityGetInput(BaseToolInput):
+class OpportunityGetInput(ByIdInput):
     opportunity_id: str = Field(..., min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
 class OpportunityCreateInput(LocationScopedInput):
@@ -57,7 +56,7 @@ class OpportunityCreateInput(LocationScopedInput):
     )
 
 
-class OpportunityUpdateInput(BaseToolInput):
+class OpportunityUpdateInput(ByIdInput):
     opportunity_id: str = Field(..., min_length=1)
     name: str | None = Field(default=None, max_length=200)
     monetary_value: float | None = Field(default=None, ge=0, description="Deal value as a number (e.g. 1500.00). Do not include currency symbols.")
@@ -71,16 +70,16 @@ class OpportunityUpdateInput(BaseToolInput):
     )
 
 
-class OpportunityIdInput(BaseToolInput):
+class OpportunityIdInput(ByIdInput):
     opportunity_id: str = Field(..., min_length=1)
 
 
-class OpportunityMoveStageInput(BaseToolInput):
+class OpportunityMoveStageInput(ByIdInput):
     opportunity_id: str = Field(..., min_length=1)
     pipeline_stage_id: str = Field(..., min_length=1, description="Target stage ID. Get stage IDs from `ghl_pipelines_get`.")
 
 
-class OpportunityUpdateStatusInput(BaseToolInput):
+class OpportunityUpdateStatusInput(ByIdInput):
     opportunity_id: str = Field(..., min_length=1)
     status: OppStatus = Field(..., description="New status. Valid values: open, won, lost, abandoned.")
 
@@ -228,9 +227,9 @@ def register(mcp) -> None:  # noqa: ANN001
         ``ghl_opportunities_list(pipeline_id='founders-pipeline-id')``.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
         api_params: dict[str, Any] = {
-            "location_id": location_id,
+            "location_id": account.location_id,
             "limit": params.limit,
             "skip": params.skip,
         }
@@ -246,7 +245,7 @@ def register(mcp) -> None:  # noqa: ANN001
             api_params["assigned_to"] = params.assigned_to
         if params.query:
             api_params["q"] = params.query
-        result = await client.get("/opportunities/search", params=api_params)
+        result = await client.get("/opportunities/search", params=api_params, location_id=account.location_id)
         opps = result.get("opportunities", [])
         page = build_pagination_response(
             opps,
@@ -263,7 +262,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_opportunities_get(params: OpportunityGetInput) -> str:
         """Get full details for a single opportunity including custom fields."""
         client = await get_client()
-        result = await client.get(f"/opportunities/{params.opportunity_id}")
+        result = await client.get(f"/opportunities/{params.opportunity_id}", location_id=params.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_opp_detail)
 
     @mcp.tool(
@@ -273,9 +272,9 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_opportunities_create(params: OpportunityCreateInput) -> str:
         """Create a new opportunity. Requires pipeline, stage, name, and a contact ID."""
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
         body: dict[str, Any] = {
-            "locationId": location_id,
+            "locationId": account.location_id,
             "pipelineId": params.pipeline_id,
             "pipelineStageId": params.pipeline_stage_id,
             "name": params.name,
@@ -292,7 +291,7 @@ def register(mcp) -> None:  # noqa: ANN001
             body["assignedTo"] = params.assigned_to
         if params.custom_fields:
             body["customFields"] = params.custom_fields
-        result = await client.post("/opportunities/", json=body)
+        result = await client.post("/opportunities/", json=body, location_id=account.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -313,7 +312,7 @@ def register(mcp) -> None:  # noqa: ANN001
         if params.custom_fields is not None: body["customFields"] = params.custom_fields
         if not body:
             return "No fields to update."
-        result = await client.put(f"/opportunities/{params.opportunity_id}", json=body)
+        result = await client.put(f"/opportunities/{params.opportunity_id}", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -323,7 +322,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_opportunities_delete(params: OpportunityIdInput) -> str:
         """Delete an opportunity permanently."""
         client = await get_client()
-        await client.delete(f"/opportunities/{params.opportunity_id}")
+        await client.delete(f"/opportunities/{params.opportunity_id}", location_id=params.location_id)
         return f"Opportunity {params.opportunity_id} deleted."
 
     @mcp.tool(
@@ -336,6 +335,7 @@ def register(mcp) -> None:  # noqa: ANN001
         result = await client.put(
             f"/opportunities/{params.opportunity_id}",
             json={"pipelineStageId": params.pipeline_stage_id},
+            location_id=params.location_id,
         )
         return format_response(result, ResponseFormat.JSON)
 
@@ -349,6 +349,7 @@ def register(mcp) -> None:  # noqa: ANN001
         result = await client.put(
             f"/opportunities/{params.opportunity_id}/status",
             json={"status": params.status.value if hasattr(params.status, "value") else params.status},
+            location_id=params.location_id,
         )
         return format_response(result, ResponseFormat.JSON)
 

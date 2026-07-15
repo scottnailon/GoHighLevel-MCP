@@ -14,7 +14,7 @@ from pydantic import Field
 from ghl_mcp.client import get_client
 from ghl_mcp.config import settings
 from ghl_mcp.formatters import format_response, md_table
-from ghl_mcp.models import BaseToolInput, LocationScopedInput, ResponseFormat
+from ghl_mcp.models import BaseToolInput, ByIdInput, LocationScopedInput, ResponseFormat
 
 
 class FieldDataType(str, Enum):
@@ -57,9 +57,8 @@ class CustomFieldsListInput(LocationScopedInput):
     )
 
 
-class CustomFieldGetInput(BaseToolInput):
+class CustomFieldGetInput(ByIdInput):
     field_id: str = Field(..., min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
 class CustomFieldOption(BaseToolInput):
@@ -91,7 +90,7 @@ class CustomFieldCreateInput(LocationScopedInput):
     max_number_of_files: int | None = Field(default=None, ge=1, le=20, description="For FILE_UPLOAD only.")
 
 
-class CustomFieldUpdateInput(BaseToolInput):
+class CustomFieldUpdateInput(ByIdInput):
     field_id: str = Field(..., min_length=1)
     name: str | None = Field(default=None, max_length=200)
     placeholder: str | None = Field(default=None, max_length=200)
@@ -99,7 +98,7 @@ class CustomFieldUpdateInput(BaseToolInput):
     options: list[CustomFieldOption] | None = Field(default=None, max_length=100)
 
 
-class CustomFieldDeleteInput(BaseToolInput):
+class CustomFieldDeleteInput(ByIdInput):
     field_id: str = Field(..., min_length=1)
 
 
@@ -171,13 +170,14 @@ def register(mcp) -> None:  # noqa: ANN001
         before populating ``custom_fields`` on contacts or opportunities.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
         api_params: dict[str, Any] = {}
         if params.model is not None:
             api_params["model"] = params.model.value if hasattr(params.model, "value") else params.model
         result = await client.get(
-            f"/locations/{location_id}/customFields",
+            f"/locations/{account.location_id}/customFields",
             params=api_params or None,
+            location_id=account.location_id,
         )
         return format_response(result, params.response_format, markdown_renderer=_render_field_list)
 
@@ -194,7 +194,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_custom_fields_get(params: CustomFieldGetInput) -> str:
         """Get full details for a single custom field, including its options for picklist types."""
         client = await get_client()
-        result = await client.get(f"/locations/customFields/{params.field_id}")
+        result = await client.get(f"/locations/customFields/{params.field_id}", location_id=params.location_id)
         return format_response(result, params.response_format, markdown_renderer=_render_field_detail)
 
     @mcp.tool(
@@ -219,7 +219,7 @@ def register(mcp) -> None:  # noqa: ANN001
         the field via ``ghl_contacts_create`` or upserts.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
 
         body: dict[str, Any] = {
             "name": params.name,
@@ -241,7 +241,9 @@ def register(mcp) -> None:  # noqa: ANN001
         if params.max_number_of_files is not None:
             body["maxNumberOfFiles"] = params.max_number_of_files
 
-        result = await client.post(f"/locations/{location_id}/customFields", json=body)
+        result = await client.post(
+            f"/locations/{account.location_id}/customFields", json=body, location_id=account.location_id
+        )
         return format_response(result, params.response_format, markdown_renderer=_render_field_detail)
 
     @mcp.tool(
@@ -274,7 +276,7 @@ def register(mcp) -> None:  # noqa: ANN001
             ]
         if not body:
             return "No fields to update — pass at least one of: name, placeholder, position, options."
-        result = await client.put(f"/locations/customFields/{params.field_id}", json=body)
+        result = await client.put(f"/locations/customFields/{params.field_id}", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -290,5 +292,5 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_custom_fields_delete(params: CustomFieldDeleteInput) -> str:
         """Delete a custom field permanently. Existing data on contacts/opportunities is also lost."""
         client = await get_client()
-        await client.delete(f"/locations/customFields/{params.field_id}")
+        await client.delete(f"/locations/customFields/{params.field_id}", location_id=params.location_id)
         return f"Custom field {params.field_id} deleted."

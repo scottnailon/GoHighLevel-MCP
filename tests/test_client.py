@@ -10,7 +10,9 @@ import pytest
 import respx
 from httpx import Response
 
+import ghl_mcp.client as client_module
 from ghl_mcp.client import GHLClient
+from ghl_mcp.config import ClientAccount, Settings
 from ghl_mcp.errors import (
     GHLAuthError,
     GHLNotFoundError,
@@ -19,10 +21,20 @@ from ghl_mcp.errors import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _single_client_configured(monkeypatch):
+    """Every test in this file gets one configured client by default, so
+    resolve_client() with no location_id just works — matching the common
+    single-client setup. Tests needing multiple clients override explicitly."""
+    account = ClientAccount(location_id="loc-test", api_key="test-token-pit-fake", label="Test Client")
+    settings = Settings(clients={"loc-test": account})
+    monkeypatch.setattr(client_module, "settings", settings)
+    return settings
+
+
 @pytest.fixture
 def client() -> GHLClient:
     return GHLClient(
-        api_key="test-token-pit-fake",
         base_url="https://services.leadconnectorhq.com",
         api_version="2021-07-28",
         max_retries=0,
@@ -125,4 +137,76 @@ async def test_authorization_header_set(client: GHLClient) -> None:
     headers = route.calls[0].request.headers
     assert headers["authorization"] == "Bearer test-token-pit-fake"
     assert headers["version"] == "2021-07-28"
+    await client.close()
+
+
+# ---------------------------------------------------------------------------
+# Multi-client token selection
+# ---------------------------------------------------------------------------
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_explicit_location_id_selects_matching_client(client: GHLClient, monkeypatch) -> None:
+    accounts = {
+        "loc-a": ClientAccount(location_id="loc-a", api_key="pit-a", label="Client A"),
+        "loc-b": ClientAccount(location_id="loc-b", api_key="pit-b", label="Client B"),
+    }
+    monkeypatch.setattr(client_module, "settings", Settings(clients=accounts))
+
+    route = respx.get("https://services.leadconnectorhq.com/contacts/").mock(
+        return_value=Response(200, json={})
+    )
+    await client.get("/contacts/", location_id="loc-b")
+    assert route.calls[0].request.headers["authorization"] == "Bearer pit-b"
+    await client.close()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_unknown_location_id_raises_before_request(client: GHLClient, monkeypatch) -> None:
+    accounts = {"loc-a": ClientAccount(location_id="loc-a", api_key="pit-a", label="Client A")}
+    monkeypatch.setattr(client_module, "settings", Settings(clients=accounts))
+
+    route = respx.get("https://services.leadconnectorhq.com/contacts/").mock(
+        return_value=Response(200, json={})
+    )
+    with pytest.raises(ValueError, match="Unknown location_id"):
+        await client.get("/contacts/", location_id="loc-nonexistent")
+    assert route.call_count == 0  # never sent — fails closed, not open
+    await client.close()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_no_location_id_uses_default(client: GHLClient, monkeypatch) -> None:
+    accounts = {
+        "loc-a": ClientAccount(location_id="loc-a", api_key="pit-a", label="Client A"),
+        "loc-b": ClientAccount(location_id="loc-b", api_key="pit-b", label="Client B"),
+    }
+    monkeypatch.setattr(client_module, "settings", Settings(clients=accounts, default_location_id="loc-b"))
+
+    route = respx.get("https://services.leadconnectorhq.com/contacts/").mock(
+        return_value=Response(200, json={})
+    )
+    await client.get("/contacts/")
+    assert route.calls[0].request.headers["authorization"] == "Bearer pit-b"
+    await client.close()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_multiple_clients_no_location_no_default_raises(client: GHLClient, monkeypatch) -> None:
+    accounts = {
+        "loc-a": ClientAccount(location_id="loc-a", api_key="pit-a", label="Client A"),
+        "loc-b": ClientAccount(location_id="loc-b", api_key="pit-b", label="Client B"),
+    }
+    monkeypatch.setattr(client_module, "settings", Settings(clients=accounts))
+
+    route = respx.get("https://services.leadconnectorhq.com/contacts/").mock(
+        return_value=Response(200, json={})
+    )
+    with pytest.raises(ValueError, match="Multiple clients configured"):
+        await client.get("/contacts/")
+    assert route.call_count == 0
     await client.close()

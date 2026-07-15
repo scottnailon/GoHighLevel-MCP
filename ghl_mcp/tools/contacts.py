@@ -20,7 +20,7 @@ from ghl_mcp.formatters import (
     md_pagination_footer,
     md_table,
 )
-from ghl_mcp.models import BaseToolInput, LocationScopedInput, PaginationInput, ResponseFormat
+from ghl_mcp.models import BaseToolInput, ByIdInput, LocationScopedInput, PaginationInput, ResponseFormat
 from ghl_mcp.pagination import build_pagination_response, extract_total
 
 
@@ -44,9 +44,8 @@ class ContactsListInput(LocationScopedInput, PaginationInput):
     )
 
 
-class ContactGetInput(BaseToolInput):
+class ContactGetInput(ByIdInput):
     contact_id: str = Field(..., description="The GHL contact ID.", min_length=1)
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
 
 
 _E164_RE = re.compile(r"^\+[1-9]\d{7,14}$")
@@ -97,7 +96,7 @@ class ContactCreateInput(LocationScopedInput):
         return _validate_phone(v)
 
 
-class ContactUpdateInput(BaseToolInput):
+class ContactUpdateInput(ByIdInput):
     contact_id: str = Field(..., min_length=1, description="The GHL contact ID. Get from `ghl_contacts_list` or `ghl_contacts_upsert`.")
     first_name: str | None = Field(default=None, max_length=100)
     last_name: str | None = Field(default=None, max_length=100)
@@ -132,7 +131,7 @@ class ContactUpdateInput(BaseToolInput):
         return _validate_phone(v)
 
 
-class ContactIdInput(BaseToolInput):
+class ContactIdInput(ByIdInput):
     contact_id: str = Field(..., min_length=1)
 
 
@@ -140,18 +139,18 @@ class ContactUpsertInput(ContactCreateInput):
     """Same shape as create — GHL deduplicates on email/phone."""
 
 
-class ContactTagsInput(BaseToolInput):
+class ContactTagsInput(ByIdInput):
     contact_id: str = Field(..., min_length=1, description="The GHL contact ID. Get from `ghl_contacts_list` or `ghl_contacts_upsert`.")
     tags: list[str] = Field(..., min_length=1, max_length=50, description="List of tag strings. Tags are created automatically if they don't exist.")
 
 
-class ContactNoteCreateInput(BaseToolInput):
+class ContactNoteCreateInput(ByIdInput):
     contact_id: str = Field(..., min_length=1)
     body: str = Field(..., min_length=1, max_length=5000)
     user_id: str | None = Field(default=None, description="The GHL user ID to attribute the note to.")
 
 
-class ContactTaskCreateInput(BaseToolInput):
+class ContactTaskCreateInput(ByIdInput):
     contact_id: str = Field(..., min_length=1)
     title: str = Field(..., min_length=1, max_length=200)
     body: str | None = Field(default=None, max_length=5000)
@@ -332,16 +331,17 @@ def register(mcp) -> None:  # noqa: ANN001
         ``next_skip`` for fetching the next page.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
+        account = settings.resolve_client(params.location_id)
         result = await client.get(
             "/contacts/",
             params={
-                "locationId": location_id,
+                "locationId": account.location_id,
                 "limit": params.limit,
                 "skip": params.skip,
                 "query": params.query,
                 "tags": ",".join(params.tags) if params.tags else None,
             },
+            location_id=account.location_id,
         )
         contacts = result.get("contacts", [])
         page = build_pagination_response(
@@ -366,7 +366,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_contacts_get(params: ContactGetInput) -> str:
         """Get full details for a single contact by ID, including custom field values."""
         client = await get_client()
-        result = await client.get(f"/contacts/{params.contact_id}")
+        result = await client.get(f"/contacts/{params.contact_id}", location_id=params.location_id)
         contact = result.get("contact", result)
         return format_response(contact, params.response_format, markdown_renderer=_render_contact_detail)
 
@@ -388,9 +388,9 @@ def register(mcp) -> None:  # noqa: ANN001
         a duplicate. Use ``ghl_contacts_upsert`` if you want dedup-by-email.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
-        body = _build_contact_body(params, location_id)
-        result = await client.post("/contacts/", json=body)
+        account = settings.resolve_client(params.location_id)
+        body = _build_contact_body(params, account.location_id)
+        result = await client.post("/contacts/", json=body, location_id=account.location_id)
         return format_response(result, ResponseFormat.MARKDOWN if params.response_format == ResponseFormat.MARKDOWN else params.response_format)
 
     @mcp.tool(
@@ -406,10 +406,13 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_contacts_update(params: ContactUpdateInput) -> str:
         """Update fields on an existing contact. Only fields you pass are modified."""
         client = await get_client()
-        body = {k: v for k, v in params.model_dump().items() if v is not None and k != "contact_id"}
+        body = {
+            k: v for k, v in params.model_dump().items()
+            if v is not None and k not in ("contact_id", "location_id", "response_format")
+        }
         # Convert snake_case to camelCase for GHL.
         body = _to_camel(body)
-        result = await client.put(f"/contacts/{params.contact_id}", json=body)
+        result = await client.put(f"/contacts/{params.contact_id}", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -425,7 +428,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_contacts_delete(params: ContactIdInput) -> str:
         """Delete a contact permanently. This cannot be undone."""
         client = await get_client()
-        await client.delete(f"/contacts/{params.contact_id}")
+        await client.delete(f"/contacts/{params.contact_id}", location_id=params.location_id)
         return f"Contact {params.contact_id} deleted."
 
     @mcp.tool(
@@ -446,9 +449,9 @@ def register(mcp) -> None:  # noqa: ANN001
         Recommended over ``ghl_contacts_create`` when importing CSV data.
         """
         client = await get_client()
-        location_id = settings.require_location_id(params.location_id)
-        body = _build_contact_body(params, location_id)
-        result = await client.post("/contacts/upsert", json=body)
+        account = settings.resolve_client(params.location_id)
+        body = _build_contact_body(params, account.location_id)
+        result = await client.post("/contacts/upsert", json=body, location_id=account.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -467,6 +470,7 @@ def register(mcp) -> None:  # noqa: ANN001
         result = await client.post(
             f"/contacts/{params.contact_id}/tags",
             json={"tags": params.tags},
+            location_id=params.location_id,
         )
         return format_response(result, ResponseFormat.JSON)
 
@@ -485,8 +489,8 @@ def register(mcp) -> None:  # noqa: ANN001
         client = await get_client()
         result = await client.delete(
             f"/contacts/{params.contact_id}/tags",
-            extra_headers=None,
             json={"tags": params.tags},
+            location_id=params.location_id,
         )
         return format_response(result, ResponseFormat.JSON)
 
@@ -506,7 +510,7 @@ def register(mcp) -> None:  # noqa: ANN001
         body: dict[str, Any] = {"body": params.body}
         if params.user_id:
             body["userId"] = params.user_id
-        result = await client.post(f"/contacts/{params.contact_id}/notes", json=body)
+        result = await client.post(f"/contacts/{params.contact_id}/notes", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -522,7 +526,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_contacts_get_notes(params: ContactIdInput) -> str:
         """Retrieve all notes attached to a contact, newest first."""
         client = await get_client()
-        result = await client.get(f"/contacts/{params.contact_id}/notes")
+        result = await client.get(f"/contacts/{params.contact_id}/notes", location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -545,7 +549,7 @@ def register(mcp) -> None:  # noqa: ANN001
             body["dueDate"] = params.due_date
         if params.assigned_to:
             body["assignedTo"] = params.assigned_to
-        result = await client.post(f"/contacts/{params.contact_id}/tasks", json=body)
+        result = await client.post(f"/contacts/{params.contact_id}/tasks", json=body, location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
     @mcp.tool(
@@ -561,7 +565,7 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_contacts_get_tasks(params: ContactIdInput) -> str:
         """Retrieve all tasks for a contact (open and completed)."""
         client = await get_client()
-        result = await client.get(f"/contacts/{params.contact_id}/tasks")
+        result = await client.get(f"/contacts/{params.contact_id}/tasks", location_id=params.location_id)
         return format_response(result, ResponseFormat.JSON)
 
 

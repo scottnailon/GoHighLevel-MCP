@@ -28,9 +28,23 @@ cp .env.example .env
 
 All configuration is via environment variables. See `.env.example` for the full list with comments.
 
-**Required:**
+**Required (single client):**
 - `GHL_API_KEY` — your Private Integration Token (PIT). Generate at GHL → Settings → Private Integrations. Starts with `pit-`. **Expires after 90 days of non-use.**
 - `GHL_LOCATION_ID` — default sub-account ID. Most tools accept a per-call override.
+
+**Multiple clients:**
+
+Set `GHL_CLIENTS` instead of `GHL_API_KEY`/`GHL_LOCATION_ID` to run one server across several GHL accounts:
+
+```bash
+GHL_CLIENTS='{"<location_id_1>":{"api_key":"pit-xxxx","label":"Client A"},"<location_id_2>":{"api_key":"pit-yyyy","label":"Client B"}}'
+```
+
+Every tool takes an optional `location_id` param to pick which client's credentials to use. To add a client, add one entry to this map — no code or restart-config changes needed beyond editing `.env`. Resolution order when `location_id` is omitted:
+
+1. `GHL_DEFAULT_LOCATION_ID`, if set
+2. the sole configured client, if there's only one
+3. otherwise the call fails with an error listing the configured clients (never guesses across multiple clients)
 
 **Optional:**
 - `GHL_BASE_URL` — defaults to `https://services.leadconnectorhq.com`.
