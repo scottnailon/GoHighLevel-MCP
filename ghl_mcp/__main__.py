@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -29,9 +30,16 @@ def main() -> None:
     asyncio.run(_check_tokens_live(logger))
 
     client_summary = ", ".join(f"{c.label} ({lid})" for lid, c in settings.clients.items()) or "none configured"
-    logger.info("Starting GoHighLevel MCP server v2.0.0 (clients: %s)", client_summary)
+    transport = os.environ.get("GHL_MCP_TRANSPORT", "stdio").lower()
+    logger.info(
+        "Starting GoHighLevel MCP server v2.0.0 (clients: %s, transport: %s)",
+        client_summary, transport,
+    )
 
-    mcp.run()
+    if transport in ("http", "streamable-http", "streamable_http"):
+        mcp.run(transport="streamable-http")
+    else:
+        mcp.run()
 
 
 async def _check_tokens_live(logger: logging.Logger) -> None:
