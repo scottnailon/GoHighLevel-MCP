@@ -41,9 +41,12 @@ def register(mcp) -> None:  # noqa: ANN001
     async def ghl_messages_list(params: MessagesListInput) -> str:
         """List messages in a conversation thread."""
         client = await get_client()
+        # This endpoint has no "skip" param — only a lastMessageId cursor,
+        # which we don't track across stateless calls. Omit it rather than
+        # send an unsupported param (GHL rejects unknown params).
         result = await client.get(
             f"/conversations/{params.conversation_id}/messages",
-            params={"limit": params.limit, "skip": params.skip},
+            params={"limit": params.limit},
             location_id=params.location_id,
         )
         return format_response(result, params.response_format)

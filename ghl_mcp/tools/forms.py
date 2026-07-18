@@ -74,10 +74,12 @@ def register(mcp) -> None:  # noqa: ANN001
         """
         client = await get_client()
         account = settings.resolve_client(params.location_id)
+        # GHL's /forms/submissions has no "skip" param — it's page-based.
+        # Convert our skip/limit interface to a 1-indexed page number.
         api_params: dict[str, Any] = {
             "locationId": account.location_id,
             "limit": params.limit,
-            "skip": params.skip,
+            "page": (params.skip // params.limit) + 1,
         }
         if params.form_id: api_params["formId"] = params.form_id
         if params.start_date: api_params["startAt"] = params.start_date

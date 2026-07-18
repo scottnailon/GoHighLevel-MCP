@@ -36,7 +36,10 @@ def register(mcp) -> None:  # noqa: ANN001
         """List conversations in a location, optionally filtered by contact or assignee."""
         client = await get_client()
         account = settings.resolve_client(params.location_id)
-        api_params: dict[str, Any] = {"locationId": account.location_id, "limit": params.limit, "skip": params.skip}
+        # /conversations/search has no "skip" param — only a startAfterDate
+        # cursor, which we don't track across stateless calls. Omit it
+        # rather than send an unsupported param (GHL rejects unknown params).
+        api_params: dict[str, Any] = {"locationId": account.location_id, "limit": params.limit}
         if params.contact_id: api_params["contactId"] = params.contact_id
         if params.assigned_to: api_params["assignedTo"] = params.assigned_to
         if params.starred is not None: api_params["starred"] = "true" if params.starred else "false"
@@ -69,7 +72,7 @@ def register(mcp) -> None:  # noqa: ANN001
         account = settings.resolve_client(params.location_id)
         result = await client.get(
             "/conversations/search",
-            params={"locationId": account.location_id, "query": params.query, "limit": params.limit, "skip": params.skip},
+            params={"locationId": account.location_id, "query": params.query, "limit": params.limit},
             location_id=account.location_id,
         )
         return format_response(result, params.response_format)

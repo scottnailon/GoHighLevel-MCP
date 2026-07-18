@@ -332,12 +332,15 @@ def register(mcp) -> None:  # noqa: ANN001
         """
         client = await get_client()
         account = settings.resolve_client(params.location_id)
+        # GHL's /contacts/ endpoint only supports cursor pagination
+        # (startAfter/startAfterId) — it has no "skip" param and returns 422
+        # if one is sent. We don't track cursors between stateless tool
+        # calls, so only the first page is retrievable via this tool for now.
         result = await client.get(
             "/contacts/",
             params={
                 "locationId": account.location_id,
                 "limit": params.limit,
-                "skip": params.skip,
                 "query": params.query,
                 "tags": ",".join(params.tags) if params.tags else None,
             },
@@ -348,7 +351,7 @@ def register(mcp) -> None:  # noqa: ANN001
             contacts,
             total=extract_total(result, "total"),
             limit=params.limit,
-            skip=params.skip,
+            skip=0,  # GHL doesn't support skip on this endpoint; always page 1
             items_key="contacts",
         )
         return format_response(page, params.response_format, markdown_renderer=_render_contact_list)
